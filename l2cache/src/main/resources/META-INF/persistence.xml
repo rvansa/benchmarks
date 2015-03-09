@@ -1,0 +1,66 @@
+<persistence xmlns="http://java.sun.com/xml/ns/persistence"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="http://java.sun.com/xml/ns/persistence http://java.sun.com/xml/ns/persistence/persistence_2_0.xsd"
+             version="2.0">
+   <persistence-unit name="org.jboss.perf.hibernate.c3p0">
+     <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+      <class>org.jboss.perf.hibernate.model.Person</class>
+      <class>org.jboss.perf.hibernate.model.Employer</class>
+      <class>org.jboss.perf.hibernate.model.Node</class>
+      <class>org.jboss.perf.hibernate.model.Beagle</class>
+      <properties>
+         <property name="hibernate.archive.autodetection" value="class" />
+         <property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect" />
+         <property name="hibernate.connection.driver_class" value="org.h2.Driver" />
+         <property name="hibernate.connection.url" value="jdbc:h2:tcp://localhost/mem:testDB;DB_CLOSE_DELAY=-1;MULTI_THREADED=1" />
+         <!--<property name="hibernate.connection.driver_class" value="com.p6spy.engine.spy.P6SpyDriver" />-->
+         <!--<property name="hibernate.connection.url" value="jdbc:p6spy:h2:tcp://localhost/mem:testDB" />-->
+
+         <!--<property name="hibernate.connection.user" value="sa" />-->
+         <!--<property name="hibernate.show_sql" value="true"/>-->
+         <property name="hibernate.flushMode" value="FLUSH_AUTO" />
+         <property name="hibernate.hbm2ddl.auto" value="update" />
+
+         <property name="hibernate.c3p0.min_size" value="5" />
+         <property name="hibernate.c3p0.max_size" value="20" />
+         <property name="hibernate.c3p0.timeout" value="300" />
+         <property name="hibernate.c3p0.max_statements" value="50" />
+         <property name="hibernate.c3p0.idle_test_period" value="3000" />
+      </properties>
+   </persistence-unit>
+   <persistence-unit name="org.jboss.perf.hibernate.hikari">
+      <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+      <properties>
+         <property name="hibernate.archive.autodetection" value="class" />
+         <property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect" />
+         <property name="hibernate.flushMode" value="FLUSH_AUTO" />
+         <property name="hibernate.hbm2ddl.auto" value="update" />
+
+         <property name="hibernate.connection.provider_class" value="org.hibernate.hikaricp.internal.HikariCPConnectionProvider" />
+         <property name="hibernate.hikari.minimumPoolSize" value="5"/>
+         <property name="hibernate.hikari.maximumPoolSize" value="20" />
+         <property name="hibernate.hikari.dataSourceClassName" value="org.h2.jdbcx.JdbcDataSource"/>
+         <property name="hibernate.hikari.dataSource.url" value="jdbc:h2:tcp://localhost/mem:testDB;DB_CLOSE_DELAY=-1;MULTI_THREADED=1"/>
+      </properties>
+   </persistence-unit>
+   <persistence-unit name="org.jboss.perf.hibernate.ironjacamar.local">
+      <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+      <non-jta-data-source>java:/IronJacamarDatasource</non-jta-data-source>
+      <properties>
+         <property name="hibernate.archive.autodetection" value="class" />
+         <property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect" />
+         <property name="hibernate.flushMode" value="FLUSH_AUTO" />
+         <property name="hibernate.hbm2ddl.auto" value="update" />
+      </properties>
+   </persistence-unit>
+   <persistence-unit name="org.jboss.perf.hibernate.ironjacamar.xa">
+      <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+      <jta-data-source>java:/IronJacamarXADatasource</jta-data-source>
+      <properties>
+         <property name="hibernate.archive.autodetection" value="class" />
+         <property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect" />
+         <property name="hibernate.flushMode" value="FLUSH_AUTO" />
+         <property name="hibernate.hbm2ddl.auto" value="update" />
+      </properties>
+   </persistence-unit>
+</persistence>

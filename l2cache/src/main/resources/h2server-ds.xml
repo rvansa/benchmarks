@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<datasources xmlns="http://www.ironjacamar.org/doc/schema">
+   <datasource jndi-name="java:/IronJacamarDatasource" pool-name="IronJacamarPool">
+      <connection-url>jdbc:h2:tcp://localhost/mem:testDB</connection-url>
+      <driver-class>org.h2.Driver</driver-class>
+      <connection-property name="DB_CLOSE_DELAY">-1</connection-property>
+      <connection-property name="MULTI_THREADED">1</connection-property>
+      <pool>
+         <min-pool-size>5</min-pool-size>
+         <max-pool-size>20</max-pool-size>
+         <prefill>true</prefill>
+      </pool>
+   </datasource>
+   <xa-datasource jndi-name="java:/IronJacamarXADatasource" pool-name="IronJacamarXAPool">
+      <xa-datasource-property name="URL">jdbc:h2:tcp://localhost/mem:testDB</xa-datasource-property>
+      <!-- ;DB_CLOSE_DELAY=-1;MULTI_THREADED=1 -->
+      <xa-datasource-class>org.h2.jdbcx.JdbcDataSource</xa-datasource-class>
+      <xa-pool>
+         <min-pool-size>5</min-pool-size>
+         <max-pool-size>20</max-pool-size>
+         <prefill>true</prefill>
+      </xa-pool>
+   </xa-datasource>
+</datasources>

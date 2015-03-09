@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ironjacamar xmlns="http://www.ironjacamar.org/doc/schema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="http://www.ironjacamar.org/doc/schema http://www.ironjacamar.org/doc/schema/ironjacamar_1_0.xsd">
+   <connection-definitions>
+      <connection-definition enabled="true" class-name="org.jboss.jca.adapters.jdbc.xa.XAManagedConnectionFactory" jndi-name="java:/eis/dummy">
+         <pool>
+            <min-pool-size>5</min-pool-size>
+            <max-pool-size>20</max-pool-size>
+            <prefill>true</prefill>
+         </pool>
+      </connection-definition>
+   </connection-definitions>
+</ironjacamar>
