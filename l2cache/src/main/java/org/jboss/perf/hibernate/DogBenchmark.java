@@ -7,6 +7,7 @@ import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.infra.Blackhole;
+import org.openjdk.jmh.infra.ThreadParams;
 
 /**
  * @author Radim Vansa &lt;rvansa@redhat.com&gt;
@@ -27,12 +28,16 @@ public class DogBenchmark extends BenchmarkBase<Beagle> {
 
         @Override
         public Beagle randomEntity(ThreadLocalRandom random) {
-           return null;
+            Beagle beagle = new Beagle();
+            beagle.setFoo(Randomizer.randomString(2, 12, random));
+            beagle.setBar(Randomizer.randomString(2, 12, random));
+            beagle.setGoo(Randomizer.randomString(6, 12, random));
+            return beagle;
         }
 
         @Override
         public void modify(Beagle beagle, ThreadLocalRandom random) {
-
+            beagle.setFoo(Randomizer.randomString(2, 12, random));
         }
     }
 
@@ -52,13 +57,13 @@ public class DogBenchmark extends BenchmarkBase<Beagle> {
     }
 
     @Benchmark
-    public void testUpdate(BeagleBenchmarkState benchmarkState, ThreadState threadState) throws Exception {
-        super.testUpdate(benchmarkState, threadState);
+    public void testUpdate(BeagleBenchmarkState benchmarkState, ThreadState threadState, ThreadParams threadParams) throws Exception {
+        super.testUpdate(benchmarkState, threadState, threadParams);
     }
 
     @Benchmark
-    public void testCriteriaUpdate(BeagleBenchmarkState benchmarkState, ThreadState threadState) throws Exception {
-        super.testCriteriaUpdate(benchmarkState, threadState);
+    public void testCriteriaUpdate(BeagleBenchmarkState benchmarkState, ThreadState threadState, ThreadParams threadParams) throws Exception {
+        super.testCriteriaUpdate(benchmarkState, threadState, threadParams);
     }
 
     @Benchmark

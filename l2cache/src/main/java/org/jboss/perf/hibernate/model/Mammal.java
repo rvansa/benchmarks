@@ -1,5 +1,6 @@
 package org.jboss.perf.hibernate.model;
 
+import javax.persistence.Column;
 import javax.persistence.DiscriminatorColumn;
 import javax.persistence.DiscriminatorType;
 import javax.persistence.DiscriminatorValue;
@@ -24,4 +25,16 @@ public class Mammal {
     long id;
 
     String foo;
+
+    public long getId() {
+        return id;
+    }
+
+    public String getFoo() {
+        return foo;
+    }
+
+    public void setFoo(String foo) {
+        this.foo = foo;
+    }
 }

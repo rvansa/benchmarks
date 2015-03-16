@@ -2,16 +2,20 @@ package org.jboss.perf.hibernate;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import org.jboss.jca.embedded.Embedded;
 import org.jboss.jca.embedded.EmbeddedFactory;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.jboss.shrinkwrap.api.spec.ResourceAdapterArchive;
+import org.jnp.server.Main;
 
 /**
  * // TODO: Document this
@@ -25,6 +29,8 @@ public class JacamarHelper {
     private ResourceAdapterArchive xaJdbcRaa;
 
     public void start() throws Throwable {
+        PrintStream originalOut = System.out;
+        PrintStream originalErr = System.err;
         embedded = EmbeddedFactory.create();
         embedded.startup();
         xaJdbcRaa = createXaJdbcRaa();
@@ -33,13 +39,26 @@ public class JacamarHelper {
         embedded.deploy(localJdbcRaa);
         h2serverDataSourceURL = tmpCopy("h2server-ds.xml");
         embedded.deploy(h2serverDataSourceURL);
+        System.setOut(originalOut);
+        System.setErr(originalErr);
     }
 
     public void stop() throws Throwable {
+        Main namingServer = embedded.lookup("NamingServer", Main.class);
+        ExecutorService lookupExecutor = null;
+        if (namingServer != null) {
+            if (namingServer.getLookupExector() instanceof ExecutorService) {
+                lookupExecutor = (ExecutorService) namingServer.getLookupExector();
+            }
+        }
         embedded.undeploy(h2serverDataSourceURL);
         embedded.undeploy(localJdbcRaa);
         embedded.undeploy(xaJdbcRaa);
         embedded.shutdown();
+        if (lookupExecutor != null) {
+            lookupExecutor.shutdownNow();
+            lookupExecutor.awaitTermination(1, TimeUnit.MINUTES);
+        }
         embedded = null;
     }
 

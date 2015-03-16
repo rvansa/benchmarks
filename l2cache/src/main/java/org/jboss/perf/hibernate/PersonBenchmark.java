@@ -7,6 +7,7 @@ import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.infra.Blackhole;
+import org.openjdk.jmh.infra.ThreadParams;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -56,13 +57,13 @@ public class PersonBenchmark extends BenchmarkBase<Person> {
     }
 
     @Benchmark
-    public void testUpdate(PersonBenchmarkState benchmarkState, ThreadState threadState) throws Exception {
-        super.testUpdate(benchmarkState, threadState);
+    public void testUpdate(PersonBenchmarkState benchmarkState, ThreadState threadState, ThreadParams threadParams) throws Exception {
+        super.testUpdate(benchmarkState, threadState, threadParams);
     }
 
     @Benchmark
-    public void testCriteriaUpdate(PersonBenchmarkState benchmarkState, ThreadState threadState) throws Exception {
-        super.testCriteriaUpdate(benchmarkState, threadState);
+    public void testCriteriaUpdate(PersonBenchmarkState benchmarkState, ThreadState threadState, ThreadParams threadParams) throws Exception {
+        super.testCriteriaUpdate(benchmarkState, threadState, threadParams);
     }
 
     @Benchmark

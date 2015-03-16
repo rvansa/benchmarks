@@ -1,5 +1,9 @@
 package org.jboss.perf.hibernate;
 
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
+
 import org.jnp.interfaces.NamingContext;
 import org.jnp.server.Main;
 import org.jnp.server.NamingServer;
@@ -23,8 +27,13 @@ public class JndiHelper {
         jndiServer = namingMain;
     }
 
-    public void stop() {
+    public void stop() throws InterruptedException {
+        Executor lookupExecutor = jndiServer.getLookupExector();
         jndiServer.stop();
+        if (lookupExecutor instanceof ExecutorService) {
+            ((ExecutorService) lookupExecutor).shutdownNow();
+            ((ExecutorService) lookupExecutor).awaitTermination(1, TimeUnit.MINUTES);
+        }
     }
 
 }

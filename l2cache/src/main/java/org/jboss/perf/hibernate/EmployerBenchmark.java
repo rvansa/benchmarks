@@ -10,6 +10,7 @@ import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.infra.Blackhole;
+import org.openjdk.jmh.infra.ThreadParams;
 
 /**
  * @author Radim Vansa &lt;rvansa@redhat.com&gt;
@@ -69,13 +70,13 @@ public class EmployerBenchmark extends BenchmarkBase<Employer> {
     }
 
     @Benchmark
-    public void testUpdate(EmployerBenchmarkState benchmarkState, ThreadState threadState) throws Exception {
-        super.testUpdate(benchmarkState, threadState);
+    public void testUpdate(EmployerBenchmarkState benchmarkState, ThreadState threadState, ThreadParams threadParams) throws Exception {
+        super.testUpdate(benchmarkState, threadState, threadParams);
     }
 
     @Benchmark
-    public void testCriteriaUpdate(EmployerBenchmarkState benchmarkState, ThreadState threadState) throws Exception {
-        super.testCriteriaUpdate(benchmarkState, threadState);
+    public void testCriteriaUpdate(EmployerBenchmarkState benchmarkState, ThreadState threadState, ThreadParams threadParams) throws Exception {
+        super.testCriteriaUpdate(benchmarkState, threadState, threadParams);
     }
 
     @Benchmark
