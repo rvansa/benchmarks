@@ -13,8 +13,8 @@
    </datasource>
    <xa-datasource jndi-name="java:/IronJacamarXADatasource" pool-name="IronJacamarXAPool">
       <xa-datasource-property name="URL">jdbc:h2:tcp://localhost/mem:testDB</xa-datasource-property>
-      <!-- ;DB_CLOSE_DELAY=-1;MULTI_THREADED=1 -->
       <xa-datasource-class>org.h2.jdbcx.JdbcDataSource</xa-datasource-class>
+      <new-connection-sql>SET DB_CLOSE_DELAY=-1; SET MULTI_THREADED=1;</new-connection-sql>
       <xa-pool>
          <min-pool-size>5</min-pool-size>
          <max-pool-size>20</max-pool-size>

@@ -14,6 +14,7 @@ import javax.persistence.EntityManagerFactory;
 import javax.persistence.OptimisticLockException;
 import javax.persistence.Persistence;
 import javax.persistence.PersistenceUnitUtil;
+import javax.persistence.SharedCacheMode;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaDelete;
 import javax.persistence.criteria.CriteriaQuery;
@@ -27,6 +28,7 @@ import javax.transaction.TransactionManager;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.hibernate.jpa.AvailableSettings;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
@@ -42,12 +44,15 @@ public abstract class BenchmarkBase<T> {
 
     static {
         Map<String, String> properties = new HashMap<String, String>();
-        properties.put("javax.persistence.sharedCache.mode", "ALL");
+        properties.put(AvailableSettings.SHARED_CACHE_MODE, SharedCacheMode.ALL.toString());
+        //properties.put(AvailableSettings.TRANSACTION_TYPE, PersistenceUnitTransactionType.JTA.toString());
+        //properties.put("hibernate.transaction.factory_class", JdbcTransactionFactory.class.getName());
+        //properties.put("hibernate.transaction.factory_class", JtaTransactionFactory.class.getName());
+        //properties.put(Environment.JTA_PLATFORM, "org.hibernate.service.jta.platform.internal.JBossStandAloneJtaPlatform");
         properties.put("hibernate.cache.region.factory_class", "org.hibernate.cache.infinispan.InfinispanRegionFactory");
         properties.put("hibernate.cache.use_second_level_cache", "true");
         properties.put("hibernate.cache.use_query_cache", "true");
         properties.put("hibernate.cache.default_cache_concurrency_strategy", "transactional");
-        properties.put("hibernate.transaction.factory_class", "org.hibernate.transaction.JTATransactionFactory");
         properties.put("hibernate.transaction.manager_lookup_class", "org.hibernate.transaction.JBossTransactionManagerLookup");
         l2Properties = Collections.unmodifiableMap(properties);
     }
@@ -102,6 +107,10 @@ public abstract class BenchmarkBase<T> {
                 } else {
                     jndiHelper.start();
                     jtaHelper.start();
+                }
+                if (useL2Cache) {
+                    // we always need managed transactions with 2LC since there are multiple participants
+                    managedTransaction = true;
                 }
                 entityManagerFactory = Persistence.createEntityManagerFactory(persistenceUnit, useL2Cache ? l2Properties : Collections.EMPTY_MAP);
                 persistenceUnitUtil = entityManagerFactory.getPersistenceUnitUtil();
@@ -170,7 +179,6 @@ public abstract class BenchmarkBase<T> {
                         created += flushEntities(entityManager, ids);
                         System.out.printf("Replaced %d ids\n", created);*/
                         created += addRandomEntities(dbSize - regularIds.size(), ThreadLocalRandom.current(), entityManager);
-                        System.out.printf("Before commit: %d", getSize(entityManager));
                     } catch (Exception e) {
                         log(e);
                         throw e;

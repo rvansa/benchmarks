@@ -233,6 +233,17 @@
             </dependency>
          </dependencies>
       </profile>
+      <profile>
+         <id>hibernate-snapshot</id>
+         <activation>
+            <property>
+               <name>hibernate.snapshot</name>
+            </property>
+         </activation>
+         <properties>
+            <version.hibernate>5.0.0-SNAPSHOT</version.hibernate>
+         </properties>
+      </profile>
    </profiles>
     <build>
         <plugins>

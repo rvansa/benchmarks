@@ -23,7 +23,7 @@
 
          <!--<property name="hibernate.connection.user" value="sa" />-->
          <!--<property name="hibernate.show_sql" value="true"/>-->
-         <property name="hibernate.flushMode" value="COMMIT" />
+         <property name="org.hibernate.flushMode" value="COMMIT" />
          <property name="hibernate.hbm2ddl.auto" value="update" />
 
          <property name="hibernate.c3p0.min_size" value="5" />
@@ -38,7 +38,7 @@
       <properties>
          <property name="hibernate.archive.autodetection" value="class" />
          <property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect" />
-         <property name="hibernate.flushMode" value="COMMIT" />
+         <property name="org.hibernate.flushMode" value="COMMIT" />
          <property name="hibernate.hbm2ddl.auto" value="update" />
 
          <property name="hibernate.connection.provider_class" value="org.hibernate.hikaricp.internal.HikariCPConnectionProvider" />
@@ -55,7 +55,7 @@
       <properties>
          <property name="hibernate.archive.autodetection" value="class" />
          <property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect" />
-         <property name="hibernate.flushMode" value="COMMIT" />
+         <property name="org.hibernate.flushMode" value="COMMIT" />
          <property name="hibernate.hbm2ddl.auto" value="update" />
       </properties>
    </persistence-unit>
@@ -65,7 +65,7 @@
       <properties>
          <property name="hibernate.archive.autodetection" value="class" />
          <property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect" />
-         <property name="hibernate.flushMode" value="COMMIT" />
+         <property name="org.hibernate.flushMode" value="COMMIT" />
          <property name="hibernate.hbm2ddl.auto" value="update" />
       </properties>
    </persistence-unit>
@@ -82,7 +82,7 @@
 
          <!--<property name="hibernate.connection.user" value="sa" />-->
          <!--<property name="hibernate.show_sql" value="true"/>-->
-         <property name="hibernate.flushMode" value="COMMIT" />
+         <property name="org.hibernate.flushMode" value="COMMIT" />
          <property name="hibernate.hbm2ddl.auto" value="update" />
 
          <property name="hibernate.c3p0.min_size" value="5" />
