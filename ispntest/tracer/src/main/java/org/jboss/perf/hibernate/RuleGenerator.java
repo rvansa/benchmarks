@@ -20,6 +20,7 @@ import java.util.zip.ZipFile;
  */
 public class RuleGenerator {
     private final static String TRACER_CLASS = Tracer.class.getName();
+    private final static String RULE_CLASS = "org.jboss.byteman.rule.Rule";
     private static final ArrayList<String> EXCLUDED_PREFIXES = new ArrayList<>();
     private static final ArrayList<String> EXCLUDED_SUFFIXES = new ArrayList<>();
     private static final ArrayList<String> INCLUDED_REGEXPS = new ArrayList<>();
@@ -56,6 +57,12 @@ public class RuleGenerator {
          URLClassLoader classLoader = new URLClassLoader(urls.toArray(new URL[urls.size()]));
          try (FileOutputStream fos = new FileOutputStream("rules.btm");
               PrintStream stream = new PrintStream(fos)) {
+             // primitives needs special handling due to boxing
+             for (String primitive : Primitives.NAMES) {
+                 ++ruleCounter;
+                 //stream.print(getRules(primitive, "new Object[] { $this }"));
+                 stream.print(getRules(primitive, "null"));
+             }
              for (String file : files) {
                  try (ZipFile zipFile = new ZipFile(file)) {
                      for (Enumeration<? extends ZipEntry> e = zipFile.entries(); e.hasMoreElements();) {
@@ -84,6 +91,9 @@ public class RuleGenerator {
                          if (excluded) {
                              continue;
                          }
+                         if (Primitives.NAME_SET.contains(name)) {
+                             continue;
+                         }
                          if (processed.containsKey(name)) {
                              continue;
                          } else {
@@ -101,14 +111,8 @@ public class RuleGenerator {
                              // constructor exists but argument is not on classpath
                          }
 
-                         StringBuilder sb = new StringBuilder();
-                         sb.append("# ").append(++ruleCounter).append(" ").append(file).append("\n");
-                         sb.append("RULE ").append("r_").append(name.replace('.', '_').replace('$', '_')).append('\n');
-                         sb.append("CLASS ").append(name).append('\n');
-                         sb.append("METHOD <init>\nAT ENTRY\nIF true\nDO\n");
-                         sb.append(TRACER_CLASS).append(".created(\"").append(name).append("\");\n");
-                         sb.append("ENDRULE\n\n");
-                         stream.print(sb.toString());
+                         ruleCounter++;
+                         stream.print(getRules(name, "$*"));
                      }
                  }
              }
@@ -117,5 +121,24 @@ public class RuleGenerator {
              e.printStackTrace();
          }
      }
+
+    private static String getRules(String name, String arguments) {
+        StringBuilder sb = new StringBuilder();
+        String ruleClassName = name.replace('.', '_').replace('$', '_');
+
+        sb.append("RULE ").append("e_").append(ruleClassName).append('\n');
+        sb.append("CLASS ").append(name).append('\n');
+        sb.append("METHOD <init>\nAT ENTRY\nIF true\nDO\n");
+        sb.append(TRACER_CLASS).append(".createEntry(\"").append(name).append("\", ").append(arguments).append(");\n");
+        sb.append("ENDRULE\n\n");
+
+        sb.append("RULE ").append("x_").append(ruleClassName).append('\n');
+        sb.append("CLASS ").append(name).append('\n');
+        sb.append("METHOD <init>\nAT EXIT\nIF true\nDO\n");
+        sb.append(TRACER_CLASS).append(".createExit(\"").append(name).append("\", ").append(arguments).append(");\n");
+        sb.append("ENDRULE\n\n");
+
+        return sb.toString();
+    }
 }
 

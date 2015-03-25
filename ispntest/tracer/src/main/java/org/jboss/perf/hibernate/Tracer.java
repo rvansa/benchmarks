@@ -1,11 +1,6 @@
 package org.jboss.perf.hibernate;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 
 import org.jboss.byteman.rule.Rule;
 
@@ -15,10 +10,17 @@ import org.jboss.byteman.rule.Rule;
 public class Tracer {
     private static boolean tracing = true;
     private static final HashMap<String, Invocations> map;
+    private static final ThreadLocal<List<Object>> constructed;
 
     static {
         Rule.disableTriggers();
         map = new HashMap<>();
+        constructed = new ThreadLocal<List<Object>>() {
+            @Override
+            protected List<Object> initialValue() {
+                return new LinkedList<>();
+            }
+        };
         Rule.enableTriggers();
     }
 
@@ -47,18 +49,36 @@ public class Tracer {
             }
             ++totalInvocations;
         }
+
+        public void deregister(StackTraceElement[] st) {
+            Counter counter = invocations.get(st);
+            // if counter is not found, the autoboxing was caused by caller,
+            // not by Byteman wrapping the primitive arguments
+            if (counter != null) {
+                counter.counter--;
+                totalInvocations--;
+            }
+        }
     }
 
     private static class StackTraceComparator implements Comparator<StackTraceElement[]> {
-        public final static StackTraceComparator INSTANCE = new StackTraceComparator();
+        public final static StackTraceComparator INSTANCE = new StackTraceComparator(5);
 
-        private StackTraceComparator() {}
+        private final int stackOffset;
+
+        private StackTraceComparator(int stackOffset) {
+            this.stackOffset = stackOffset;
+        }
 
         @Override
         public int compare(StackTraceElement[] o1, StackTraceElement[] o2) {
             if (o1.length < o2.length) return -1;
             if (o1.length > o2.length) return 1;
-            for (int i = 5; i < o1.length; ++i) {
+            for (int i = stackOffset; i < o1.length; ++i) {
+                if (o1[i] == null || o2[i] == null) {
+                    // this is a specially forged stack
+                    continue;
+                }
                 int comp = o1[i].getClassName().compareTo(o2[i].getClassName());
                 if (comp != 0) return comp;
                 comp = o1[i].getMethodName().compareTo(o2[i].getMethodName());
@@ -70,52 +90,58 @@ public class Tracer {
         }
     }
 
-
-    public static synchronized void created(String className) {
+    public static synchronized void createEntry(String className, Object[] arguments) {
         if (tracing) {
             tracing = false;
             Rule.disableTriggers();
             try {
                 StackTraceElement[] stackTrace = new Exception().getStackTrace();
-                if (stackTrace.length > 6 && className.equals(stackTrace[6].getClassName()) && "<init>".equals(stackTrace[6].getMethodName())) {
-                    // this constructor is invoked using this(...);
-                    if (stackTrace[6].getLineNumber() != stackTrace[5].getLineNumber()) {
-                        // for default constructors, sometimes the constructor calls itself twice...
+                if (arguments != null) {
+                    decrementPrimitiveInvocations(arguments, stackTrace);
+
+                    Object self = arguments[0];
+                    if (!className.equals(self.getClass().getName())) {
                         return;
                     }
+                    List<Object> list = constructed.get();
+                    for (Iterator<Object> iterator = list.iterator(); iterator.hasNext(); ) {
+                        if (iterator.next() == self) return;
+                    }
+                    list.add(self);
                 }
-                HashMap<String, Invocations> map = Tracer.map;
+
                 Invocations invocations = map.get(className);
                 if (invocations == null) {
                     map.put(className, new Invocations(stackTrace));
                 } else {
                     invocations.register(stackTrace);
                 }
-                // decrease count for base classes
-                ClassLoader loader = Thread.currentThread().getContextClassLoader();
-                if (loader != null) {
-                    try {
-                        Class<?> clazz = loader.loadClass(className);
-                        Class<?> superClazz = clazz.getSuperclass();
-                        if (superClazz != null && superClazz != Object.class) {
-                            invocations = map.get(superClazz.getName());
-                            if (invocations == null) {
-                                ClassLoader superClassLoader = superClazz.getClassLoader();
-                                if (!superClazz.isEnum() && superClassLoader != null) { // ignore boot class loader
-                                    System.err.printf("%04x: Counter for %s loaded by %s not found (from %s)%n", Thread.currentThread().getId(), superClazz.getName(), superClassLoader, className);
-                                    for (StackTraceElement ste : stackTrace) {
-                                        System.err.printf("   %s.%s%n", ste.getClassName(), ste.getMethodName());
-                                    }
-                                }
-                            } else {
-                                long cvalue = --invocations.totalInvocations;
-                                if (cvalue < 0) {
-                                    System.err.printf("%04x, Counter %d < 0 for %s (from %s)%n", Thread.currentThread().getId(), cvalue, superClazz.getName(), className);
-                                }
-                            }
-                        }
-                    } catch (ClassNotFoundException e) {
-                        System.err.println(e.getMessage());
+            } catch (Throwable t) {
+                t.printStackTrace();
+            } finally {
+                Rule.enableTriggers();
+                tracing = true;
+            }
+        }
+    }
+
+    public static synchronized void createExit(String className, Object[] arguments) {
+        if (tracing) {
+            tracing = false;
+            Rule.disableTriggers();
+            try {
+                if (arguments == null) return;
+                StackTraceElement[] stackTrace = new Exception().getStackTrace();
+                decrementPrimitiveInvocations(arguments, stackTrace);
+
+                Object self = arguments[0];
+                if (!className.equals(self.getClass().getName())) {
+                    return;
+                }
+                for (Iterator<Object> iterator = constructed.get().iterator(); iterator.hasNext(); ) {
+                    if (iterator.next() == self) {
+                        iterator.remove();
+                        return;
                     }
                 }
             } catch (Throwable t) {
@@ -127,11 +153,24 @@ public class Tracer {
         }
     }
 
+    private static void decrementPrimitiveInvocations(Object[] arguments, StackTraceElement[] stackTrace) {
+        // unroll this constructor from the stack trace
+        StackTraceElement[] forgedStack = new StackTraceElement[stackTrace.length + 1];
+        System.arraycopy(stackTrace, 5, forgedStack, 6, stackTrace.length - 5);
+        for (int i = 1; i < arguments.length; ++i) {
+            Object arg = arguments[i];
+            if (arg != null && Primitives.CLASS_SET.contains(arg.getClass())) {
+                Invocations primitiveInvocations = map.get(arg.getClass().getName());
+                primitiveInvocations.deregister(forgedStack);
+            }
+        }
+    }
+
     public static synchronized void resetStats() {
         Tracer.map.clear();
     }
 
-    public static synchronized void printStats(boolean printStackTraces) {
+    public static synchronized void printStats(boolean printStackTraces, int invocations) {
         tracing = false;
         ArrayList<Map.Entry<String, Invocations>> sorted = new ArrayList<>(Tracer.map.entrySet());
         Collections.sort(sorted, new Comparator<Map.Entry<String, Invocations>>() {
@@ -146,9 +185,14 @@ public class Tracer {
         for (Map.Entry<String, Invocations> entry : sorted) {
             int value = entry.getValue().totalInvocations;
             if (value != 0) {
-                System.out.printf("%7dx %s%n", value, entry.getKey());
+                if (invocations > 0) {
+                    System.out.printf("%4.2f/op (%7dx) %s%n", (double) value / invocations, value, entry.getKey());
+                } else {
+                    System.out.printf("%7dx %s%n", value, entry.getKey());
+                }
                 if (printStackTraces) {
                     for (Map.Entry<StackTraceElement[], Counter> inv : entry.getValue().invocations.entrySet()) {
+                        if (inv.getValue().counter == 0) continue;
                         System.out.printf("\tInvoked %d times from:%n", inv.getValue().counter);
                         StackTraceElement[] stackTrace = inv.getKey();
                         for (int i = 5; i < stackTrace.length; ++i) {
