@@ -161,7 +161,9 @@ public class Tracer {
             Object arg = arguments[i];
             if (arg != null && Primitives.CLASS_SET.contains(arg.getClass())) {
                 Invocations primitiveInvocations = map.get(arg.getClass().getName());
-                primitiveInvocations.deregister(forgedStack);
+                if (primitiveInvocations != null) {
+                    primitiveInvocations.deregister(forgedStack);
+                }
             }
         }
     }
