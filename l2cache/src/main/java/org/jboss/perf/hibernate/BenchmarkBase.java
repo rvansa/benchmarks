@@ -11,9 +11,11 @@ import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
+import javax.persistence.EntityTransaction;
 import javax.persistence.OptimisticLockException;
 import javax.persistence.Persistence;
 import javax.persistence.PersistenceUnitUtil;
+import javax.persistence.PessimisticLockException;
 import javax.persistence.SharedCacheMode;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaDelete;
@@ -24,11 +26,12 @@ import javax.persistence.criteria.Root;
 import javax.persistence.metamodel.EntityType;
 import javax.persistence.metamodel.Metamodel;
 import javax.persistence.metamodel.SingularAttribute;
+import javax.transaction.Status;
 import javax.transaction.TransactionManager;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.hibernate.jpa.AvailableSettings;
+import org.hibernate.annotations.CacheConcurrencyStrategy;
+import org.hibernate.cache.infinispan.InfinispanRegionFactory;
+import org.hibernate.cfg.AvailableSettings;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
@@ -39,29 +42,40 @@ import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.infra.ThreadParams;
 
 public abstract class BenchmarkBase<T> {
-    private static final Map<String, String> l2Properties;
+    private static final Map<String, String> l2Properties = new HashMap<String, String>();
+    private static final Map<String, String> nonCachedProperties = new HashMap<String, String>();
     private static final boolean printStackTraces = Boolean.valueOf(System.getProperty("printStackTraces", "true"));
 
     static {
-        Map<String, String> properties = new HashMap<String, String>();
-        properties.put(AvailableSettings.SHARED_CACHE_MODE, SharedCacheMode.ALL.toString());
+        l2Properties.put(org.hibernate.jpa.AvailableSettings.SHARED_CACHE_MODE, SharedCacheMode.ALL.toString());
         //properties.put(AvailableSettings.TRANSACTION_TYPE, PersistenceUnitTransactionType.JTA.toString());
         //properties.put("hibernate.transaction.factory_class", JdbcTransactionFactory.class.getName());
         //properties.put("hibernate.transaction.factory_class", JtaTransactionFactory.class.getName());
         //properties.put(Environment.JTA_PLATFORM, "org.hibernate.service.jta.platform.internal.JBossStandAloneJtaPlatform");
-        properties.put("hibernate.cache.region.factory_class", "org.hibernate.cache.infinispan.InfinispanRegionFactory");
-        properties.put("hibernate.cache.use_second_level_cache", "true");
-        properties.put("hibernate.cache.use_query_cache", "true");
-        properties.put("hibernate.cache.default_cache_concurrency_strategy", "transactional");
-        properties.put("hibernate.transaction.manager_lookup_class", "org.hibernate.transaction.JBossTransactionManagerLookup");
-        l2Properties = Collections.unmodifiableMap(properties);
+        l2Properties.put(AvailableSettings.CACHE_REGION_FACTORY, InfinispanRegionFactory.class.getName());
+        l2Properties.put(InfinispanRegionFactory.INFINISPAN_CONFIG_RESOURCE_PROP, "second-level-cache-cfg.xml");
+        l2Properties.put(AvailableSettings.USE_SECOND_LEVEL_CACHE, "true");
+//        l2Properties.put(AvailableSettings.USE_QUERY_CACHE, "true");
+        l2Properties.put(AvailableSettings.USE_QUERY_CACHE, "false");
+        l2Properties.put(AvailableSettings.DEFAULT_CACHE_CONCURRENCY_STRATEGY, CacheConcurrencyStrategy.TRANSACTIONAL.toString());
+        l2Properties.put("hibernate.transaction.manager_lookup_class", "org.hibernate.transaction.JBossTransactionManagerLookup");
+
+        nonCachedProperties.put(AvailableSettings.USE_SECOND_LEVEL_CACHE, "false");
     }
 
     protected static final String C3P0 = "c3p0";
     protected static final String HIKARI = "hikari";
     protected static final String IRON_JACAMAR = "ironjacamar";
 
-    protected static Log log = LogFactory.getLog("Benchmark");
+    //protected static Log log = LogFactory.getLog("Benchmark");
+
+    protected static void trace(String msg) {
+    }
+
+    protected static void error(String msg, Throwable t) {
+        //System.err.println(msg);
+        //if (printStackTraces) t.printStackTrace();
+    }
 
     protected static void log(Throwable t) {
         if (printStackTraces) t.printStackTrace();
@@ -82,19 +96,27 @@ public abstract class BenchmarkBase<T> {
         @Param("10")
         int transactionSize;
 
-        @Param({ "true", "false"})
-        boolean useL2Cache;
+        @Param({ "none", "tx"})
+        String secondLevelCache;
 
         private JndiHelper jndiHelper = new JndiHelper();
         private JtaHelper jtaHelper = new JtaHelper();
         private JacamarHelper jacamarHelper = new JacamarHelper();
         private EntityManagerFactory entityManagerFactory;
         // IDs of Persons that are commonly in the DB to make it big
-        private ArrayList<Long> regularIds;
+        protected ArrayList<Long> regularIds;
         private PersistenceUnitUtil persistenceUnitUtil;
         private TransactionManager tm = com.arjuna.ats.jta.TransactionManager.transactionManager();
         private boolean managedTransaction;
         private SingularAttribute idProperty;
+
+        protected EntityManagerFactory getEntityManagerFactory() {
+            return entityManagerFactory;
+        }
+
+        protected SingularAttribute getIdProperty() {
+            return idProperty;
+        }
 
         @Setup
         public void setup() throws Throwable {
@@ -108,11 +130,12 @@ public abstract class BenchmarkBase<T> {
                     jndiHelper.start();
                     jtaHelper.start();
                 }
-                if (useL2Cache) {
+//                if (useL2Cache) {
                     // we always need managed transactions with 2LC since there are multiple participants
-                    managedTransaction = true;
-                }
-                entityManagerFactory = Persistence.createEntityManagerFactory(persistenceUnit, useL2Cache ? l2Properties : Collections.EMPTY_MAP);
+//                    managedTransaction = true;
+//                }
+                entityManagerFactory = Persistence.createEntityManagerFactory(persistenceUnit,
+                      secondLevelCache.equals("none") ? nonCachedProperties : getSecondLevelCacheProperties());
                 persistenceUnitUtil = entityManagerFactory.getPersistenceUnitUtil();
                 regularIds = new ArrayList<Long>(dbSize);
                 Metamodel metamodel = entityManagerFactory.getMetamodel();
@@ -129,6 +152,10 @@ public abstract class BenchmarkBase<T> {
                 throw t;
             }
             System.err.println("setup() finished");
+        }
+
+        protected Map<String, String> getSecondLevelCacheProperties() {
+            return new HashMap<>(l2Properties);
         }
 
         @Setup(Level.Iteration)
@@ -151,10 +178,13 @@ public abstract class BenchmarkBase<T> {
                     }
                     regularIds.clear();
                     regularIds.ensureCapacity(dbSize);
-                    for (Long id : entityManager.createQuery(query).getResultList()) {
+
+                    List<Long> resultList = entityManager.createQuery(query).getResultList();
+                    for (Long id : resultList) {
                         if (regularIds.size() == dbSize) break;
                         regularIds.add(id);
                     }
+                    Collections.sort(regularIds);
                     System.out.printf("Registered %d existing entities\n", regularIds.size());
                 } finally {
                     commitTransaction(entityManager);
@@ -167,27 +197,29 @@ public abstract class BenchmarkBase<T> {
                 }
                 if (pre < dbSize) {
                     int created = 0;
-                    beginTransaction(entityManager);
-                    try {
-                        /*Map<Long, Integer> ids = new HashMap<Long, Integer>(batchLoadSize);
-                        for (int i = 0; i < regularIds.size(); ++i) {
-                            ids.put(regularIds.get(i), i);
-                            if (ids.size() == batchLoadSize) {
-                                created += flushEntities(entityManager, ids);
+                    boolean failed;
+                    do {
+                        failed = false;
+                        beginTransaction(entityManager);
+                        try {
+                            created = addRandomEntities(dbSize - regularIds.size(), ThreadLocalRandom.current(), entityManager);
+                            commitTransaction(entityManager);
+                        } catch (Exception e) {
+                            if (isLockException(e)) {
+                                rollbackTransaction(entityManager);
+                                failed = true;
+                            } else {
+                                log(e);
+                                throw e;
                             }
                         }
-                        created += flushEntities(entityManager, ids);
-                        System.out.printf("Replaced %d ids\n", created);*/
-                        created += addRandomEntities(dbSize - regularIds.size(), ThreadLocalRandom.current(), entityManager);
-                    } catch (Exception e) {
-                        log(e);
-                        throw e;
-                    } finally {
-                        commitTransaction(entityManager);
-                    }
+                    } while (failed);
                     try {
                         long post = getSize(entityManager);
                         System.out.printf("DB contained %d entries, %d created, now %d, ids %d\n", pre, created, post, regularIds.size());
+                        if (regularIds.size() != post) {
+                            throw new IllegalStateException();
+                        }
                     } finally {
                     }
                 }
@@ -203,24 +235,25 @@ public abstract class BenchmarkBase<T> {
             ArrayList<T> batchEntities = new ArrayList<T>(batchLoadSize);
             for (int i = 0; i < numEntries; i++) {
                 T entity = randomEntity(random);
-                log.trace("Persisting entity " + entity);
+                trace("Persisting entity " + entity);
                 entityManager.persist(entity);
                 batchEntities.add(entity);
                 if ((i + 1) % batchLoadSize == 0) {
-                    log.trace("Flushing " + batchEntities.size() + " entities");
+                    trace("Flushing " + batchEntities.size() + " entities");
                     entityManager.flush();
                     entityManager.clear();
+                    // let's commit the transaction in order not to timeout
+                    commitTransaction(entityManager);
+                    beginTransaction(entityManager);
+                    // add regularIds after successful commit
                     for (T e : batchEntities) {
                         Long id = (Long) persistenceUnitUtil.getIdentifier(e);
                         regularIds.add(id);
                     }
                     batchEntities.clear();
-                    // let's commit the transaction in order not to timeout
-                    commitTransaction(entityManager);
-                    beginTransaction(entityManager);
                 }
             }
-            log.trace("Flushing " + batchEntities.size() + " entities");
+            trace("Flushing " + batchEntities.size() + " entities");
             entityManager.flush();
             for (T e : batchEntities) {
                 Long id = (Long) persistenceUnitUtil.getIdentifier(e);
@@ -230,7 +263,7 @@ public abstract class BenchmarkBase<T> {
         }
 
         public void beginTransaction(EntityManager entityManager) throws Exception {
-            log.trace("Transaction begin, state is " + tm.getStatus());
+            trace("Transaction begin, state is " + tm.getStatus());
             try {
                 if (managedTransaction) {
                     tm.begin();
@@ -238,38 +271,43 @@ public abstract class BenchmarkBase<T> {
                 } else {
                     entityManager.getTransaction().begin();
                 }
-                log.trace("Transaction began, state is " + tm.getStatus());
+                trace("Transaction began, state is " + tm.getStatus());
             } catch (Exception e) {
-                log.error("Failed starting TX", e);
+                error("Failed starting TX", e);
                 throw e;
             }
         }
 
         public void commitTransaction(EntityManager entityManager) throws Exception {
-            log.trace("Transaction commit, state is " + tm.getStatus());
+            trace("Transaction commit, state is " + tm.getStatus());
             try {
                 if (managedTransaction) {
                     tm.commit();
                 } else {
                     entityManager.getTransaction().commit();
                 }
-                log.trace("Transaction commited, state is " + tm.getStatus());
+                trace("Transaction commited, state is " + tm.getStatus());
             } catch (Exception e) {
-                log.error("Failed committing TX", e);
+                error("Failed committing TX", e);
                 throw e;
             }
         }
 
         public void rollbackTransaction(EntityManager entityManager) throws Exception {
-            log.trace("Rolling back");
+            trace("Rolling back");
             try {
                 if (managedTransaction) {
-                    tm.rollback();
+                    if (tm.getStatus() != Status.STATUS_NO_TRANSACTION) {
+                        tm.rollback();
+                    }
                 } else {
-                    entityManager.getTransaction().rollback();
+                    EntityTransaction tx = entityManager.getTransaction();
+                    if (tx.isActive()) {
+                        tx.rollback();
+                    }
                 }
             } catch (Exception e) {
-                log.error("Failed rolling back TX", e);
+                error("Failed rolling back TX", e);
                 throw e;
             }
         }
@@ -395,6 +433,10 @@ public abstract class BenchmarkBase<T> {
             Predicate condition = getRootLevelCondition(cb, root);
             if (condition != null) {
                 query = query.where(condition);
+            } else {
+                // for some reason H2 sometimes returns incorrect results for
+                // 'SELECT COUNT(*) FROM PERSON' while correct for 'SELECT COUNT(*) FROM PERSON WHERE 1=1'
+                query = query.where(cb.equal(cb.literal(1), cb.literal(1)));
             }
             return entityManager.createQuery(query).getSingleResult();
         }
@@ -406,6 +448,14 @@ public abstract class BenchmarkBase<T> {
         public abstract T randomEntity(ThreadLocalRandom random);
 
         public abstract void modify(T entity, ThreadLocalRandom random);
+
+        public Long getRandomId(ThreadLocalRandom random) {
+            return regularIds.get(random.nextInt(dbSize));
+        }
+
+        public Long getRandomId(ThreadLocalRandom random, int rangeStart, int rangeEnd) {
+            return regularIds.get(random.nextInt(rangeStart, rangeEnd));
+        }
     }
 
     @State(Scope.Thread)
@@ -422,11 +472,15 @@ public abstract class BenchmarkBase<T> {
                     T person = benchmarkState.randomEntity(threadState.random);
                     entityManager.persist(person);
                 }
-            } catch (RuntimeException e) {
-                log(e);
-                throw e;
-            } finally {
                 benchmarkState.commitTransaction(entityManager);
+            } catch (Exception e) {
+                if (isLockException(e)) {
+                    benchmarkState.rollbackTransaction(entityManager);
+                } else {
+                    log(e);
+                    benchmarkState.rollbackTransaction(entityManager);
+                    throw e;
+                }
             }
         } finally {
             entityManager.close();
@@ -441,19 +495,23 @@ public abstract class BenchmarkBase<T> {
                 for (Long id : randomIds(benchmarkState, threadState.random)) {
                     T entity = entityManager.find(benchmarkState.getClazz(), id);
                     if (entity == null) {
-                        throw new IllegalStateException("Entity " + id + " is null");
+                        onReadNull(id);
                     }
                     blackhole.consume(entity);
                 }
-            } catch (RuntimeException e) {
-                log(e);
-                throw e;
-            } finally {
                 benchmarkState.commitTransaction(entityManager);
+            } catch (Exception e) {
+                log(e);
+                benchmarkState.rollbackTransaction(entityManager);
+                throw e;
             }
         } finally {
             entityManager.close();
         }
+    }
+
+    protected void onReadNull(Long id) {
+        throw new IllegalStateException("Entity " + id + " is null");
     }
 
     protected void testCriteriaRead(BenchmarkState<T> benchmarkState, ThreadState threadState, Blackhole blackhole) throws Exception {
@@ -469,11 +527,11 @@ public abstract class BenchmarkBase<T> {
                 for (T entity : results) {
                     blackhole.consume(entity);
                 }
-            } catch (RuntimeException e) {
-                log(e);
-                throw e;
-            } finally {
                 benchmarkState.commitTransaction(entityManager);
+            } catch (Exception e) {
+                log(e);
+                benchmarkState.rollbackTransaction(entityManager);
+                throw e;
             }
         } finally {
             entityManager.close();
@@ -490,16 +548,20 @@ public abstract class BenchmarkBase<T> {
                 for (Long id : ids) {
                     T entity = entityManager.find(benchmarkState.getClazz(), id);
                     if (entity == null) {
-                        throw new IllegalStateException("Entity for id " + id + " is null!");
+                        onReadNull(id);
                     }
                     benchmarkState.modify(entity, threadState.random);
                     entityManager.persist(entity);
                 }
-            } catch (RuntimeException e) {
-                log(e);
-                throw e;
-            } finally {
                 benchmarkState.commitTransaction(entityManager);
+            } catch (Exception e) {
+                if (isLockException(e)) {
+                    benchmarkState.rollbackTransaction(entityManager);
+                } else {
+                    log(e);
+                    benchmarkState.rollbackTransaction(entityManager);
+                    throw e;
+                }
             }
         } finally {
             entityManager.close();
@@ -516,11 +578,15 @@ public abstract class BenchmarkBase<T> {
                     benchmarkState.modify(entity, threadState.random);
                     entityManager.persist(entity);
                 }
-            } catch (RuntimeException e) {
-                log(e);
-                throw e;
-            } finally {
                 benchmarkState.commitTransaction(entityManager);
+            } catch (Exception e) {
+                if (isLockException(e)) {
+                    benchmarkState.rollbackTransaction(entityManager);
+                } else {
+                    log(e);
+                    benchmarkState.rollbackTransaction(entityManager);
+                    throw e;
+                }
             }
         } finally {
             entityManager.close();
@@ -539,11 +605,15 @@ public abstract class BenchmarkBase<T> {
                     }
                 }
                 // TODO it's possible that some of the entries are already deleted
-            } catch (RuntimeException e) {
-                log(e);
-                throw e;
-            } finally {
                 benchmarkState.commitTransaction(entityManager);
+            } catch (Exception e) {
+                if (isLockException(e)) {
+                    benchmarkState.rollbackTransaction(entityManager);
+                } else {
+                    log(e);
+                    benchmarkState.rollbackTransaction(entityManager);
+                    throw e;
+                }
             }
         } finally {
             entityManager.close();
@@ -554,7 +624,6 @@ public abstract class BenchmarkBase<T> {
         EntityManager entityManager = benchmarkState.entityManagerFactory.createEntityManager();
         try {
             benchmarkState.beginTransaction(entityManager);
-            boolean shouldCommit = true;
             try {
                 CriteriaBuilder cb = entityManager.getCriteriaBuilder();
                 CriteriaDelete<T> query = cb.createCriteriaDelete(benchmarkState.getClazz());
@@ -562,17 +631,14 @@ public abstract class BenchmarkBase<T> {
                 int deleted = entityManager.createQuery(query).executeUpdate();
                 // it's possible that some of the entries are already deleted
                 blackhole.consume(deleted);
-            } catch (RuntimeException e) {
-                shouldCommit = false;
-                if (!isOptimisticException(e)) {
-                    log(e);
-                    throw e;
-                }
-            } finally {
-                if (shouldCommit) {
-                    benchmarkState.commitTransaction(entityManager);
-                } else {
+                benchmarkState.commitTransaction(entityManager);
+            } catch (Exception e) {
+                if (isLockException(e)) {
                     benchmarkState.rollbackTransaction(entityManager);
+                } else {
+                    log(e);
+                    benchmarkState.rollbackTransaction(entityManager);
+                    throw e;
                 }
             }
         } finally {
@@ -580,12 +646,35 @@ public abstract class BenchmarkBase<T> {
         }
     }
 
-    private boolean isOptimisticException(Throwable e) {
+    protected void testQuery(BenchmarkState<T> benchmarkState, Blackhole blackhole, QueryRunner queryRunner) throws Exception {
+        EntityManager entityManager = benchmarkState.entityManagerFactory.createEntityManager();
+        try {
+            benchmarkState.beginTransaction(entityManager);
+            try {
+                CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+                Collection<?> resultList = queryRunner.runQuery(entityManager, cb);
+                for (Object o : resultList) {
+                    blackhole.consume(o);
+                }
+                benchmarkState.commitTransaction(entityManager);
+            } catch (Exception e) {
+                log(e);
+                benchmarkState.rollbackTransaction(entityManager);
+                throw e;
+            }
+        } finally {
+            entityManager.close();
+        }
+    }
+
+    protected static boolean isLockException(Throwable e) {
         if (e instanceof OptimisticLockException) {
+            return true;
+        } else if (e instanceof PessimisticLockException) {
             return true;
         } else if (e.getMessage().startsWith("Row not found")) {
             return true;
-        } else if (e.getCause() != null && isOptimisticException(e.getCause())) {
+        } else if (e.getCause() != null && isLockException(e.getCause())) {
             return true;
         }
         return false;
@@ -596,17 +685,17 @@ public abstract class BenchmarkBase<T> {
         int rangeStart = (benchmarkState.dbSize * threadId) / threadCount;
         int rangeEnd = (benchmarkState.dbSize * (threadId + 1)) / threadCount;
         while (ids.size() < benchmarkState.transactionSize) {
-            Long id = benchmarkState.regularIds.get(random.nextInt(rangeStart, rangeEnd));
+            Long id = benchmarkState.getRandomId(random, rangeStart, rangeEnd);
             ids.add(id);
         }
         return ids;
     }
 
 
-    private Set<Long> randomIds(BenchmarkState<T> benchmarkState, ThreadLocalRandom random) {
+    protected Set<Long> randomIds(BenchmarkState<T> benchmarkState, ThreadLocalRandom random) {
         Set<Long> ids = new HashSet<Long>(benchmarkState.transactionSize);
         while (ids.size() < benchmarkState.transactionSize) {
-            Long id = benchmarkState.regularIds.get(random.nextInt(benchmarkState.dbSize));
+            Long id = benchmarkState.getRandomId(random);
             ids.add(id);
         }
         return ids;

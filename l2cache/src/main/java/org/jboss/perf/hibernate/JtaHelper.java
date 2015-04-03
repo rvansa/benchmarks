@@ -1,5 +1,6 @@
 package org.jboss.perf.hibernate;
 
+import java.lang.reflect.Method;
 import java.util.Properties;
 import javax.naming.Context;
 import javax.naming.InitialContext;
@@ -23,7 +24,16 @@ public class JtaHelper {
     Context ctx;
 
     static {
-        lookup.init(new ConfigurationBuilder().classLoader(JtaHelper.class.getClassLoader()).build());
+        ConfigurationBuilder configurationBuilder = new ConfigurationBuilder();
+        try {
+            Method method = ConfigurationBuilder.class.getMethod("classLoader", ClassLoader.class);
+            method.invoke(configurationBuilder, JtaHelper.class.getClassLoader());
+        } catch (NoSuchMethodException e) {
+            // ignore for Infinispan 7.x
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        lookup.init(configurationBuilder.build());
     }
 
     public void start() throws Exception {

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <datasources xmlns="http://www.ironjacamar.org/doc/schema">
-   <datasource jndi-name="java:/IronJacamarDatasource" pool-name="IronJacamarPool">
+   <datasource jndi-name="java:/DS_h2server" pool-name="H2ServerPool">
       <connection-url>jdbc:h2:tcp://localhost/mem:testDB</connection-url>
       <driver-class>org.h2.Driver</driver-class>
       <connection-property name="DB_CLOSE_DELAY">-1</connection-property>
@@ -8,17 +8,28 @@
       <pool>
          <min-pool-size>5</min-pool-size>
          <max-pool-size>20</max-pool-size>
-         <prefill>true</prefill>
+         <prefill>false</prefill>
       </pool>
    </datasource>
-   <xa-datasource jndi-name="java:/IronJacamarXADatasource" pool-name="IronJacamarXAPool">
-      <xa-datasource-property name="URL">jdbc:h2:tcp://localhost/mem:testDB</xa-datasource-property>
-      <xa-datasource-class>org.h2.jdbcx.JdbcDataSource</xa-datasource-class>
-      <new-connection-sql>SET DB_CLOSE_DELAY=-1; SET MULTI_THREADED=1;</new-connection-sql>
+   <xa-datasource jndi-name="java:/XADS_postgres" pool-name="PostgresXAPool">
+      <xa-datasource-property name="ServerName">localhost</xa-datasource-property>
+      <xa-datasource-property name="DatabaseName">testdb</xa-datasource-property>
+      <xa-datasource-class>org.postgresql.xa.PGXADataSource</xa-datasource-class>
+      <!--<new-connection-sql>SET DB_CLOSE_DELAY=-1; SET MULTI_THREADED=0; SET MVCC=true; SET TRACE_LEVEL_SYSTEM_OUT=3;</new-connection-sql>-->
       <xa-pool>
          <min-pool-size>5</min-pool-size>
          <max-pool-size>20</max-pool-size>
-         <prefill>true</prefill>
+         <prefill>false</prefill>
+      </xa-pool>
+   </xa-datasource>
+   <xa-datasource jndi-name="java:/XADS_h2server" pool-name="H2ServerXAPool">
+      <xa-datasource-property name="URL">jdbc:h2:tcp://localhost/mem:testDB</xa-datasource-property>
+      <xa-datasource-class>org.h2.jdbcx.JdbcDataSource</xa-datasource-class>
+      <!--<new-connection-sql>SET DB_CLOSE_DELAY=-1; SET MULTI_THREADED=0; SET MVCC=true; SET TRACE_LEVEL_SYSTEM_OUT=3;</new-connection-sql>-->
+      <xa-pool>
+         <min-pool-size>5</min-pool-size>
+         <max-pool-size>20</max-pool-size>
+         <prefill>false</prefill>
       </xa-pool>
    </xa-datasource>
 </datasources>
