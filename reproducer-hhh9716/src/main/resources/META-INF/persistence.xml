@@ -1,0 +1,20 @@
+<persistence xmlns="http://java.sun.com/xml/ns/persistence"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="http://java.sun.com/xml/ns/persistence http://java.sun.com/xml/ns/persistence/persistence_2_0.xsd"
+             version="2.0">
+   <persistence-unit name="hikari.mem">
+      <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+      <properties>
+         <property name="hibernate.archive.autodetection" value="class" />
+         <property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect" />
+         <property name="org.hibernate.flushMode" value="COMMIT" />
+         <property name="hibernate.hbm2ddl.auto" value="update" />
+
+         <property name="hibernate.connection.provider_class" value="org.hibernate.hikaricp.internal.HikariCPConnectionProvider" />
+         <!--<property name="hibernate.show_sql" value="true"/>-->
+         <property name="hibernate.hikari.maximumPoolSize" value="20" />
+         <property name="hibernate.hikari.dataSourceClassName" value="org.h2.jdbcx.JdbcDataSource"/>
+         <property name="hibernate.hikari.dataSource.url" value="jdbc:h2:mem:testDB;DB_CLOSE_DELAY=-1;MULTI_THREADED=1"/>
+      </properties>
+   </persistence-unit>
+</persistence>
