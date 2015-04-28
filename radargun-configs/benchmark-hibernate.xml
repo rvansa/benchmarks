@@ -1,0 +1,196 @@
+<!-- RadarGun 2.0 benchmark -->
+<benchmark xmlns="urn:radargun:benchmark:2.1">
+
+   <!-- Specifies where should the master open socket  -->
+   <master bindAddress="${master.address:127.0.0.1}" port="${master.port:2103}"/>
+
+   <!-- List of cluster configurations where the benchmark should run-->
+   <clusters>
+      <!--<cluster size="1"/>-->
+      <!--<cluster size="2"/>-->
+      <!--<cluster size="4"/>-->
+      <cluster size="8"/>
+   </clusters>
+
+   <!-- List of configurations of the services -->
+   <configurations>
+      <config name="IronJacamar Postgres">
+         <setup plugin="hibernate-orm5">
+            <vm-args>
+               <memory min="4G" max="4G" />
+            </vm-args>
+            <default xmlns="urn:radargun:plugins:hibernate-orm5:2.1" persistence-unit="default" hbm2ddl-auto="UPDATE">
+               <connection-pool>
+                  <iron-jacamar data-source-jndi="java:/XADS_postgres" jta="true">
+                     <datasource-definitions>
+                        <datasources xmlns="http://www.ironjacamar.org/doc/schema"
+                                     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                                     xsi:schemaLocation="http://www.ironjacamar.org/doc/schema http://www.ironjacamar.org/doc/schema/datasources_1_0.xsd">
+                           <xa-datasource jndi-name="java:/XADS_postgres" pool-name="PostgresXAPool">
+                              <xa-datasource-property name="ServerName">${master.address}</xa-datasource-property>
+                              <xa-datasource-property name="DatabaseName">testdb</xa-datasource-property>
+                              <xa-datasource-class>org.postgresql.xa.PGXADataSource</xa-datasource-class>
+                              <xa-pool>
+                                 <min-pool-size>5</min-pool-size>
+                                 <max-pool-size>100</max-pool-size>
+                                 <prefill>false</prefill>
+                              </xa-pool>
+                           </xa-datasource>
+                        </datasources>
+                     </datasource-definitions>
+                  </iron-jacamar>
+               </connection-pool>
+               <database>
+                  <postgres94 />
+               </database>
+            </default>
+         </setup>
+      </config>
+      <config name="IronJacamar Postgres + 2LC">
+         <setup plugin="hibernate-orm5">
+            <vm-args>
+               <!--<flight-recorder enabled="true" filename="/home/vansa1/tmp/record_2lc_${env.HOSTNAME}_${cluster.size}.jfr" settings="sampling"/>-->
+               <memory min="4G" max="4G" />
+               <properties>
+                  <property name="jgroups.tcp.address" value="GLOBAL"/>
+                  <property name="infinispan.stats.enabled" value="true" />
+               </properties>
+            </vm-args>
+            <default xmlns="urn:radargun:plugins:hibernate-orm5:2.1"
+                     transaction-timeout="900"
+                     persistence-unit="default"
+                     hbm2ddl-auto="UPDATE">
+               <cache>
+                  <infinispan use-query-cache="false"
+                              cache-concurrency-strategy="READ_ONLY"
+                              shared-cache-mode="ALL"
+                              configuration="distributed-2lc.xml">
+                     <class-mappings>
+                        <!--<mapping class="org.radargun.jpa.entities.Constant" to-cache="immutable-entity"/>-->
+                     </class-mappings>
+                  </infinispan>
+               </cache>
+               <connection-pool>
+                  <iron-jacamar data-source-jndi="java:/XADS_postgres" jta="true">
+                     <datasource-definitions>
+                        <datasources xmlns="http://www.ironjacamar.org/doc/schema"
+                                     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                                     xsi:schemaLocation="http://www.ironjacamar.org/doc/schema http://www.ironjacamar.org/doc/schema/datasources_1_0.xsd">
+                           <xa-datasource jndi-name="java:/XADS_postgres" pool-name="PostgresXAPool">
+                              <xa-datasource-property name="ServerName">${master.address}</xa-datasource-property>
+                              <xa-datasource-property name="DatabaseName">testdb</xa-datasource-property>
+                              <xa-datasource-class>org.postgresql.xa.PGXADataSource</xa-datasource-class>
+                              <xa-pool>
+                                 <min-pool-size>5</min-pool-size>
+                                 <max-pool-size>100</max-pool-size>
+                                 <prefill>false</prefill>
+                              </xa-pool>
+                           </xa-datasource>
+                        </datasources>
+                     </datasource-definitions>
+                  </iron-jacamar>
+               </connection-pool>
+               <database>
+                  <postgres94 />
+               </database>
+            </default>
+         </setup>
+      </config>
+   </configurations>
+
+   <!-- Sequence of stages executed on the cluster -->
+   <scenario>
+      <service-start />
+      <jvm-monitor-start />
+      <define var="num.entities" value="100000" />
+      <load-entities num-entites="${num.entities}" drop-before-load="true">
+         <entity-generator>
+            <constant length="20" />
+         </entity-generator>
+      </load-entities>
+      <crud-operations-scheduled duration="30s" test-name="warmup"
+                        transaction-size="10"
+                        ramp-up="5s"
+                        min-waiting-threads="4"
+                        max-threads="100"
+                        log-transaction-exceptions="false">
+         <create-txs invocations="1" interval="50" />
+         <delete-txs invocations="1" interval="50" />
+         <read-txs invocations="1" interval="10" />
+      </crud-operations-scheduled>
+
+      <load-entities num-entites="100000" drop-before-load="true">
+         <entity-generator>
+            <constant length="20" />
+         </entity-generator>
+      </load-entities>
+
+      <repeat name="100k" from="2" to="6">
+         <crud-operations-scheduled test-name="100k" amend-test="true"
+                                    ramp-up="10s" duration="60s"
+                                    transaction-size="10"
+                                    min-waiting-threads="4"
+                                    max-threads="100"
+                                    log-transaction-exceptions="false">
+            <statistics>
+               <default>
+                  <operation-stats>
+                     <default/>
+                     <histogram />
+                  </operation-stats>
+               </default>
+            </statistics>
+            <create-txs invocations="1" interval="50" />
+            <delete-txs invocations="1" interval="50" />
+            <read-txs invocations="${repeat.100k.counter}" interval="10" />
+
+         </crud-operations-scheduled>
+      </repeat>
+
+      <load-entities num-entites="1000000" drop-before-load="true">
+         <entity-generator>
+            <constant length="20" />
+         </entity-generator>
+      </load-entities>
+
+      <repeat name="1M" from="2" to="6">
+         <crud-operations-scheduled test-name="1M" amend-test="true"
+                                    ramp-up="10s" duration="60s"
+                                    transaction-size="10"
+                                    min-waiting-threads="4"
+                                    max-threads="100"
+                                    log-transaction-exceptions="false">
+            <statistics>
+               <default>
+                  <operation-stats>
+                     <default/>
+                     <histogram />
+                  </operation-stats>
+               </default>
+            </statistics>
+            <create-txs invocations="1" interval="50" />
+            <delete-txs invocations="1" interval="50" />
+            <read-txs invocations="${repeat.1M.counter}" interval="10" />
+
+         </crud-operations-scheduled>
+      </repeat>
+      <service-stop />
+   </scenario>
+
+   <!-- How the statistics are reported -->
+   <reports>
+      <reporter type="html">
+         <report>
+            <html xmlns="urn:radargun:reporters:reporter-default:2.1">
+               <test-report combined-tests="[100k,1M]" />
+            </html>
+         </report>
+      </reporter>
+      <reporter type="serialized">
+         <report>
+            <serialized xmlns="urn:radargun:reporters:reporter-default:2.1" />
+         </report>
+      </reporter>
+   </reports>
+
+</benchmark>
