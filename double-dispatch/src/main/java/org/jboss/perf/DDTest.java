@@ -32,6 +32,11 @@ public class DDTest {
         @Setup
         public void setup() throws ClassNotFoundException, IllegalAccessException, InstantiationException {
             impl = impls[clazz - 'A'];
+            // make sure the compiler knows about those methods
+            Blackhole blackhole = new Blackhole();
+            for (I i : impls) {
+                blackhole.consume(i.accept(visitor));
+            }
         }
 
         public I getImpl() {
