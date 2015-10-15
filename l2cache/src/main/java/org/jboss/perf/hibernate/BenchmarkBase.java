@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
+
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.EntityTransaction;
@@ -29,6 +32,8 @@ import javax.persistence.metamodel.SingularAttribute;
 import javax.transaction.Status;
 import javax.transaction.TransactionManager;
 
+import com.mockrunner.jdbc.PreparedStatementResultSetHandler;
+import com.mockrunner.mock.jdbc.MockResultSet;
 import org.hibernate.annotations.CacheConcurrencyStrategy;
 import org.hibernate.cache.infinispan.InfinispanRegionFactory;
 import org.hibernate.cfg.AvailableSettings;
@@ -40,6 +45,8 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.infra.ThreadParams;
+import org.perfmock.FunctionalMockResultSet;
+import org.perfmock.PerfMockDriver;
 
 public abstract class BenchmarkBase<T> {
     private static final Map<String, String> l2Properties = new HashMap<String, String>();
@@ -47,6 +54,7 @@ public abstract class BenchmarkBase<T> {
     private static final boolean printStackTraces = Boolean.valueOf(System.getProperty("printStackTraces", "true"));
 
     static {
+//        l2Properties.put("javax.persistence.sharedCache.mode", SharedCacheMode.ALL.toString());
         l2Properties.put(org.hibernate.jpa.AvailableSettings.SHARED_CACHE_MODE, SharedCacheMode.ALL.toString());
         //properties.put(AvailableSettings.TRANSACTION_TYPE, PersistenceUnitTransactionType.JTA.toString());
         //properties.put("hibernate.transaction.factory_class", JdbcTransactionFactory.class.getName());
@@ -57,10 +65,13 @@ public abstract class BenchmarkBase<T> {
         l2Properties.put(AvailableSettings.USE_SECOND_LEVEL_CACHE, "true");
 //        l2Properties.put(AvailableSettings.USE_QUERY_CACHE, "true");
         l2Properties.put(AvailableSettings.USE_QUERY_CACHE, "false");
-        l2Properties.put(AvailableSettings.DEFAULT_CACHE_CONCURRENCY_STRATEGY, CacheConcurrencyStrategy.TRANSACTIONAL.toString());
+        //l2Properties.put(AvailableSettings.DEFAULT_CACHE_CONCURRENCY_STRATEGY, CacheConcurrencyStrategy.READ_ONLY.toAccessType().getExternalName());
+        l2Properties.put(AvailableSettings.DEFAULT_CACHE_CONCURRENCY_STRATEGY, CacheConcurrencyStrategy.TRANSACTIONAL.toAccessType().getExternalName());
         l2Properties.put("hibernate.transaction.manager_lookup_class", "org.hibernate.transaction.JBossTransactionManagerLookup");
 
         nonCachedProperties.put(AvailableSettings.USE_SECOND_LEVEL_CACHE, "false");
+
+        PerfMockDriver.getInstance(); // make sure PerfMockDriver is classloaded
     }
 
     protected static final String C3P0 = "c3p0";
@@ -70,6 +81,7 @@ public abstract class BenchmarkBase<T> {
     //protected static Log log = LogFactory.getLog("Benchmark");
 
     protected static void trace(String msg) {
+//        System.err.println(msg);
     }
 
     protected static void error(String msg, Throwable t) {
@@ -84,7 +96,8 @@ public abstract class BenchmarkBase<T> {
     @State(Scope.Benchmark)
     public abstract static class BenchmarkState<T> {
 
-        @Param({C3P0, HIKARI, IRON_JACAMAR + ".local", IRON_JACAMAR + ".xa"})
+//        @Param({C3P0, HIKARI, IRON_JACAMAR + ".local", IRON_JACAMAR + ".xa"})
+        @Param({ C3P0 + ".mock", HIKARI + ".mock", IRON_JACAMAR + ".mock.local", IRON_JACAMAR + ".mock.xa"})
         String persistenceUnit;
 
         @Param("10000")
@@ -109,6 +122,7 @@ public abstract class BenchmarkBase<T> {
         private TransactionManager tm = com.arjuna.ats.jta.TransactionManager.transactionManager();
         private boolean managedTransaction;
         private SingularAttribute idProperty;
+        private String entityName;
 
         protected EntityManagerFactory getEntityManagerFactory() {
             return entityManagerFactory;
@@ -120,7 +134,7 @@ public abstract class BenchmarkBase<T> {
 
         @Setup
         public void setup() throws Throwable {
-            System.err.printf("setup() called in thread %s(%d) on object %08x\n", Thread.currentThread().getName(), Thread.currentThread().getId(), this.hashCode());
+            setupMock();
             tm.setTransactionTimeout(1200);
             try {
                 if (persistenceUnit.startsWith(IRON_JACAMAR)) {
@@ -147,11 +161,38 @@ public abstract class BenchmarkBase<T> {
                         break;
                     }
                 }
+                entityName = entityManagerFactory.getMetamodel().entity(getClazz()).getName();
+                PerfMockDriver.getInstance().setMocking(true);
             } catch (Throwable t) {
                 log(t);
                 throw t;
             }
             System.err.println("setup() finished");
+        }
+
+        public void setupMock() {
+            PreparedStatementResultSetHandler handler = PerfMockDriver.getInstance().getPreparedStatementHandler();
+            // we need regexp for the select ... where x in ( ... )
+            handler.setUseRegularExpressions(true);
+
+            handler.prepareResultSet("call next value for hibernate_sequence", getIncrementing(dbSize));
+
+            MockResultSet size = handler.createResultSet();
+            size.addColumn("col_0_0_");
+            size.addRow(Collections.singletonList((long) dbSize));
+            handler.prepareResultSet("select count\\(.*\\) as col_0_0_ from .*", size);
+
+            MockResultSet nonMatching = handler.createResultSet();
+            // let's have one column, one row, but not matching to anything
+            nonMatching.addColumn(":-)", Collections.singletonList(null));
+            handler.prepareGlobalResultSet(nonMatching);
+        }
+
+        protected MockResultSet getIncrementing(int initialValue) {
+            MockResultSet newId = new FunctionalMockResultSet("newId");
+            AtomicLong counter = new AtomicLong(initialValue);
+            newId.addRow(Collections.<Object>singletonList((Supplier) counter::getAndIncrement));
+            return newId;
         }
 
         protected Map<String, String> getSecondLevelCacheProperties() {
@@ -350,6 +391,11 @@ public abstract class BenchmarkBase<T> {
                         beginTransaction(entityManager);
                     }
                 } else {
+//                    String jpql = "DELETE FROM " + entityName;
+//                    if (allowedIds != null) {
+//                        jpql += " WHERE " + idProperty.getName() + " NOT IN (" + collectionToString(allowedIds) + ")";
+//                    }
+//                    deleted = entityManager.createQuery(jpql).executeUpdate();
                     CriteriaDelete<T> query = cb.createCriteriaDelete(getClazz());
                     Root<T> root = query.from(getClazz());
                     if (allowedIds != null) {
@@ -412,6 +458,7 @@ public abstract class BenchmarkBase<T> {
                 } finally {
                     entityManager.close();
                 }
+                PerfMockDriver.getInstance().setMocking(false);
                 entityManagerFactory.close();
                 if (persistenceUnit.startsWith(IRON_JACAMAR)) {
                     jacamarHelper.stop();
@@ -441,7 +488,23 @@ public abstract class BenchmarkBase<T> {
             return entityManager.createQuery(query).getSingleResult();
         }
 
-        public abstract Class<T> getClazz();
+       protected List<Object> seq(int from, int to) {
+           ArrayList<Object> list = new ArrayList<>(to - from);
+           for (long i = from; i < to; ++i) {
+               list.add(i);
+           }
+           return list;
+       }
+
+       protected List<Object> list(int size, Object item) {
+           ArrayList<Object> list = new ArrayList<>(size);
+           for (int i = 0; i < size; ++i) {
+               list.add(item);
+           }
+           return list;
+       }
+
+       public abstract Class<T> getClazz();
 
         protected abstract boolean hasForeignKeys();
 
@@ -461,6 +524,17 @@ public abstract class BenchmarkBase<T> {
     @State(Scope.Thread)
     public static class ThreadState {
         ThreadLocalRandom random = ThreadLocalRandom.current();
+    }
+
+    protected static String collectionToString(Collection collection) {
+        StringBuilder sb = new StringBuilder();
+        for (Object element : collection) {
+            if (sb.length() != 0) {
+                sb.append(", ");
+            }
+            sb.append(element);
+        }
+        return sb.toString();
     }
 
     protected void testCreate(BenchmarkState<T> benchmarkState, ThreadState threadState) throws Exception {
@@ -510,7 +584,7 @@ public abstract class BenchmarkBase<T> {
         }
     }
 
-    protected void onReadNull(Long id) {
+    protected void onReadNull(Object id) {
         throw new IllegalStateException("Entity " + id + " is null");
     }
 
@@ -625,10 +699,13 @@ public abstract class BenchmarkBase<T> {
         try {
             benchmarkState.beginTransaction(entityManager);
             try {
+                Set<Long> randomIds = randomIds(benchmarkState, threadState.random);
                 CriteriaBuilder cb = entityManager.getCriteriaBuilder();
                 CriteriaDelete<T> query = cb.createCriteriaDelete(benchmarkState.getClazz());
-                query.where(query.from(benchmarkState.getClazz()).get(benchmarkState.idProperty).in(randomIds(benchmarkState, threadState.random)));
+                query.where(query.from(benchmarkState.getClazz()).get(benchmarkState.idProperty).in(randomIds));
                 int deleted = entityManager.createQuery(query).executeUpdate();
+//                String jpql = "DELETE FROM " + benchmarkState.entityName + " WHERE " + benchmarkState.idProperty + " IN (" + collectionToString(randomIds) + ")";
+//                int deleted = entityManager.createQuery(jpql).executeUpdate();
                 // it's possible that some of the entries are already deleted
                 blackhole.consume(deleted);
                 benchmarkState.commitTransaction(entityManager);
@@ -668,15 +745,15 @@ public abstract class BenchmarkBase<T> {
     }
 
     protected static boolean isLockException(Throwable e) {
-        if (e instanceof OptimisticLockException) {
+        /*if (e instanceof OptimisticLockException) {
             return true;
         } else if (e instanceof PessimisticLockException) {
             return true;
-        } else if (e.getMessage().startsWith("Row not found")) {
+        } else if (e.getMessage() != null && e.getMessage().startsWith("Row not found")) {
             return true;
         } else if (e.getCause() != null && isLockException(e.getCause())) {
             return true;
-        }
+        }*/
         return false;
     }
 

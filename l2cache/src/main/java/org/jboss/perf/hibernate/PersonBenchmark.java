@@ -1,8 +1,10 @@
 package org.jboss.perf.hibernate;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+
 import javax.persistence.EntityManager;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
@@ -10,6 +12,8 @@ import javax.persistence.criteria.Predicate;
 import javax.persistence.criteria.Root;
 import javax.persistence.metamodel.SingularAttribute;
 
+import com.mockrunner.jdbc.PreparedStatementResultSetHandler;
+import com.mockrunner.mock.jdbc.MockResultSet;
 import org.jboss.perf.hibernate.model.Person;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Scope;
@@ -21,6 +25,7 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+import org.perfmock.PerfMockDriver;
 
 /**
  * @author Radim Vansa &lt;rvansa@redhat.com&gt;
@@ -39,6 +44,40 @@ public class PersonBenchmark extends BenchmarkBase<Person> {
             firstName = (SingularAttribute<Person, String>) getEntityManagerFactory().getMetamodel().entity(Person.class).getSingularAttribute("firstName");
             middleName = (SingularAttribute<Person, String>) getEntityManagerFactory().getMetamodel().entity(Person.class).getSingularAttribute("middleName");
             lastName = (SingularAttribute<Person, String>) getEntityManagerFactory().getMetamodel().entity(Person.class).getSingularAttribute("lastName");
+        }
+
+        @Override
+        public void setupMock() {
+            super.setupMock();
+            PreparedStatementResultSetHandler handler = PerfMockDriver.getInstance().getPreparedStatementHandler();
+
+            MockResultSet all = handler.createResultSet();
+            all.addColumn("col_0_0_", seq(0, dbSize));
+            handler.prepareResultSet("select person0_.id as col_0_0_ from Person person0_", all);
+
+            handler.prepareUpdateCount("insert into Person \\(firstName, lastName, middleName, id\\) values \\(\\?, \\?, \\?, \\?\\)", 1);
+            // for Hibernate 4.x
+            handler.prepareGeneratedKeys("insert into Person \\(id, firstName, lastName, middleName\\) values \\(null, \\?, \\?, \\?\\)", getIncrementing(dbSize));
+
+            MockResultSet readPerson = handler.createResultSet();
+            readPerson.addColumn("id1_7_0_", Collections.singletonList(1L));
+            readPerson.addColumn("firstNam2_7_0_", Collections.singletonList("firstName"));
+            readPerson.addColumn("lastName3_7_0_", Collections.singletonList("lastName"));
+            readPerson.addColumn("middleNa4_7_0_", Collections.singletonList("middleName"));
+            handler.prepareResultSet("select person0_.id as id1_7_0_, person0_.firstName as firstNam2_7_0_, person0_.lastName as lastName3_7_0_, person0_.middleName as middleNa4_7_0_ from Person person0_ where person0_.id=\\?", readPerson);
+
+            handler.prepareUpdateCount("update Person set firstName=\\?, lastName=\\?, middleName=\\? where id=\\?", 1);
+
+            handler.prepareUpdateCount("delete from Person where id=\\?", 1);
+
+            MockResultSet readPersons = handler.createResultSet();
+            readPersons.addColumn("id1_7_", seq(0, transactionSize));
+            readPersons.addColumn("firstNam2_7_", list(transactionSize, "firstName"));
+            readPersons.addColumn("lastName3_7_", list(transactionSize, "lastName"));
+            readPersons.addColumn("middleNa4_7_", list(transactionSize, "middleName"));
+            handler.prepareResultSet("select person0_.id as id1_7_, person0_.firstName as firstNam2_7_, person0_.lastName as lastName3_7_, person0_.middleName as middleNa4_7_ from Person person0_ where person0_.id in \\(.*\\)", readPersons);
+
+            handler.prepareUpdateCount("delete from Person where id in \\(.*\\)", transactionSize);
         }
 
         @Override

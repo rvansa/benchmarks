@@ -1,6 +1,5 @@
 package org.jboss.perf.hibernate.model;
 
-import javax.persistence.DiscriminatorValue;
 import javax.persistence.Entity;
 
 /**
@@ -9,7 +8,7 @@ import javax.persistence.Entity;
  * @author Radim Vansa &lt;rvansa@redhat.com&gt;
  */
 @Entity
-@DiscriminatorValue("B")
+//@DiscriminatorValue("B")
 public class Beagle extends Dog {
     String goo;
 

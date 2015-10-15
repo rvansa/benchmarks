@@ -1,6 +1,7 @@
 package org.jboss.perf.hibernate;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.concurrent.ThreadLocalRandom;
 import javax.persistence.EntityManager;
 import javax.persistence.criteria.CriteriaBuilder;
@@ -11,6 +12,8 @@ import javax.persistence.criteria.Root;
 import javax.persistence.criteria.Subquery;
 import javax.persistence.metamodel.SingularAttribute;
 
+import com.mockrunner.jdbc.PreparedStatementResultSetHandler;
+import com.mockrunner.mock.jdbc.MockResultSet;
 import org.jboss.perf.hibernate.model.Node;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Param;
@@ -19,6 +22,7 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.infra.ThreadParams;
+import org.perfmock.PerfMockDriver;
 
 /**
  * @author Radim Vansa &lt;rvansa@redhat.com&gt;
@@ -44,6 +48,27 @@ public class NodeBenchmark extends BenchmarkBase<Node> {
             leftSize = getEntityManagerFactory().getMetamodel().entity(Node.class).getSingularAttribute("leftSize", int.class);
             right = getEntityManagerFactory().getMetamodel().entity(Node.class).getSingularAttribute("right", Node.class);
             rightSize = getEntityManagerFactory().getMetamodel().entity(Node.class).getSingularAttribute("rightSize", int.class);
+        }
+
+        @Override
+        public void setupMock() {
+            super.setupMock();
+            PreparedStatementResultSetHandler handler = PerfMockDriver.getInstance().getPreparedStatementHandler();
+
+            MockResultSet all = handler.createResultSet();
+            all.addColumn("col_0_0_", seq(0, dbSize));
+            handler.prepareResultSet("select node0_.id as col_0_0_ from Node node0_ where node0_.root=\\?", all);
+
+            handler.prepareGeneratedKeys("insert into Node \\(id, left_id, leftSize, right_id, rightSize, root\\) values \\(null, \\?, \\?, \\?, \\?, \\?\\)", getIncrementing(dbSize));
+
+            MockResultSet single = handler.createResultSet();
+            single.addColumn("id1_6_0_", Collections.singletonList(1L));
+            single.addColumn("left_id5_6_0_", Collections.singletonList(2L));
+            single.addColumn("leftSize2_6_0_", Collections.singletonList(49));
+            single.addColumn("right_id6_6_0_", Collections.singletonList(3L));
+            single.addColumn("rightSiz3_6_0_", Collections.singletonList(50));
+            single.addColumn("root4_6_0_", Collections.singletonList(true));
+            handler.prepareResultSet("select node0_.id as id1_6_0_, node0_.left_id as left_id5_6_0_, node0_.leftSize as leftSize2_6_0_, node0_.right_id as right_id6_6_0_, node0_.rightSize as rightSiz3_6_0_, node0_.root as root4_6_0_ from Node node0_ where node0_.id=\\?", single);
         }
 
         @Override

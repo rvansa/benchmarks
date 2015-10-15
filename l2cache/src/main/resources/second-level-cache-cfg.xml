@@ -17,18 +17,12 @@
       <local-cache name="entity" statistics="false">
          <transaction mode="NON_XA"
                       transaction-manager-lookup="org.infinispan.transaction.lookup.GenericTransactionManagerLookup"/>
-         <!--<eviction max-entries="10000" strategy="LIRS"/>-->
-         <custom-interceptors>
-            <interceptor position="FIRST" class="org.jboss.perf.hibernate.interceptors.CountingInterceptor" />
-         </custom-interceptors>
+         <eviction max-entries="200000" strategy="LIRS"/>
       </local-cache>
 
       <local-cache name="immutable-entity" statistics="false">
          <transaction mode="NONE"/>
-         <!--<eviction max-entries="10000" strategy="LIRS"/>-->
-         <custom-interceptors>
-            <interceptor position="FIRST" class="org.jboss.perf.hibernate.interceptors.CountingInterceptor" />
-         </custom-interceptors>
+         <eviction max-entries="200000" strategy="LIRS"/>
       </local-cache>
 
       <local-cache name="collection" statistics="false">

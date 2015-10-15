@@ -15,10 +15,10 @@
 
     <properties>
        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-       <javac.target>1.7</javac.target>
-       <version.jmh>1.6.1</version.jmh>
+       <javac.target>1.8</javac.target>
+       <version.jmh>1.10.3</version.jmh>
        <uberjar.name>benchmarks</uberjar.name>
-       <version.hibernate>4.3.8.Final</version.hibernate>
+       <version.hibernate>5.0.1.Final</version.hibernate>
        <version.hibernate.validator>4.1.0.Final</version.hibernate.validator>
        <version.jbossts>4.16.3.Final</version.jbossts>
        <version.jbossts.jts>4.17.3.Final</version.jbossts.jts>
@@ -28,7 +28,7 @@
        <version.ironjacamar>1.0.31.Final</version.ironjacamar>
        <version.shrinkwrap>1.1.2</version.shrinkwrap>
        <version.shrinkwrap.descriptors>1.1.0-beta-1</version.shrinkwrap.descriptors>
-       <version.infinispan>7.2.0-SNAPSHOT</version.infinispan>
+       <version.infinispan>7.2.4.Final</version.infinispan>
     </properties>
 
     <dependencies>
@@ -94,6 +94,11 @@
           <artifactId>HikariCP-java6</artifactId>
           <version>2.3.3</version>
        </dependency>
+        <dependency>
+            <groupId>org.perfmock</groupId>
+            <artifactId>perfmock</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
        <dependency>
           <groupId>org.hibernate</groupId>
           <artifactId>hibernate-validator-annotation-processor</artifactId>
@@ -109,6 +114,12 @@
           <artifactId>ironjacamar-core-impl</artifactId>
           <version>${version.ironjacamar}</version>
           <scope>runtime</scope>
+          <exclusions>
+             <exclusion>
+                <groupId>org.picketbox</groupId>
+                <artifactId>picketbox</artifactId>
+             </exclusion>
+          </exclusions>
        </dependency>
        <dependency>
           <groupId>org.jboss.ironjacamar</groupId>
@@ -182,6 +193,16 @@
           <version>${version.jbossstdio}</version>
           <scope>runtime</scope>
        </dependency>
+        <dependency>
+            <groupId>org.perfmock</groupId>
+            <artifactId>perfmock</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-log4j12</artifactId>
+            <version>1.7.7</version>
+        </dependency>
     </dependencies>
 
    <profiles>
@@ -224,7 +245,7 @@
             <dependency>
                <groupId>com.h2database</groupId>
                <artifactId>h2</artifactId>
-               <version>1.4.186</version>
+               <version>1.3.176</version>
             </dependency>
          </dependencies>
       </profile>
@@ -270,12 +291,34 @@
          </activation>
          <dependencies>
             <dependency>
-            <groupId>p6spy</groupId>
-            <artifactId>p6spy</artifactId>
-            <version>2.1.2</version>
+                <groupId>p6spy</groupId>
+                <artifactId>p6spy</artifactId>
+                <version>2.1.4</version>
             </dependency>
          </dependencies>
       </profile>
+       <profile>
+           <id>hibernate-43</id>
+           <activation>
+               <property>
+                   <name>hibernate.43</name>
+               </property>
+           </activation>
+           <properties>
+               <version.hibernate>4.3.8.Final</version.hibernate>
+           </properties>
+       </profile>
+       <profile>
+           <id>hibernate-42</id>
+           <activation>
+               <property>
+                   <name>hibernate.42</name>
+               </property>
+           </activation>
+           <properties>
+               <version.hibernate>4.2.20.Final</version.hibernate>
+           </properties>
+       </profile>
       <profile>
          <id>hibernate-snapshot</id>
          <activation>
@@ -284,8 +327,35 @@
             </property>
          </activation>
          <properties>
-            <version.hibernate>5.0.0-SNAPSHOT</version.hibernate>
+            <version.hibernate>5.0.1-SNAPSHOT</version.hibernate>
          </properties>
+      </profile>
+      <profile>
+         <id>enhanced</id>
+         <activation>
+             <activeByDefault>false</activeByDefault>
+             <property>
+                 <name>hibernate.enhanced</name>
+             </property>
+         </activation>
+         <build>
+             <plugins>
+                 <plugin>
+                     <groupId>org.hibernate.orm.tooling</groupId>
+                     <artifactId>hibernate-enhance-maven-plugin</artifactId>
+                     <version>${version.hibernate}</version>
+                     <executions>
+                         <execution>
+
+                             <phase>compile</phase>
+                             <goals>
+                                 <goal>enhance</goal>
+                             </goals>
+                         </execution>
+                     </executions>
+                 </plugin>
+             </plugins>
+         </build>
       </profile>
    </profiles>
     <build>

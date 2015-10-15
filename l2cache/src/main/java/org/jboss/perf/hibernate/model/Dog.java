@@ -9,7 +9,7 @@ import javax.persistence.Entity;
  * @author Radim Vansa &lt;rvansa@redhat.com&gt;
  */
 @Entity
-@DiscriminatorValue("D")
+//@DiscriminatorValue("D")
 public class Dog extends Mammal {
     String bar;
 

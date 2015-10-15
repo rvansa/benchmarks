@@ -24,6 +24,7 @@ public class JtaHelper {
     Context ctx;
 
     static {
+        System.setProperty("com.arjuna.ats.arjuna.common.propertiesFile", "default-jbossts-properties.xml");
         ConfigurationBuilder configurationBuilder = new ConfigurationBuilder();
         try {
             Method method = ConfigurationBuilder.class.getMethod("classLoader", ClassLoader.class);
