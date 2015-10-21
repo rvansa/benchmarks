@@ -52,14 +52,17 @@ public class DogBenchmark extends BenchmarkBase<Beagle> {
 
             MockResultSet all = handler.createResultSet();
             all.addColumn("col_0_0_", seq(0, dbSize));
-            handler.prepareResultSet("select beagle0_.id as col_0_0_ from Beagle beagle0_ inner join Dog beagle0_1_ on beagle0_.id=beagle0_1_.id inner join Mammal beagle0_2_ on beagle0_.id=beagle0_2_.id", all);
+            handler.prepareResultSet("select beagle0_\\.id as col_0_0_ from Beagle beagle0_ inner join Dog beagle0_1_ on beagle0_\\.id=beagle0_1_.id inner join Mammal beagle0_2_ on beagle0_\\.id=beagle0_2_\\.id", all);
 
             MockResultSet single = handler.createResultSet();
             single.addColumn("id1_5_0_", Collections.singletonList(1L));
+            single.addColumn("id1_6_0_", Collections.singletonList(1L));
             single.addColumn("foo2_5_0_", Collections.singletonList("foo"));
+            single.addColumn("foo2_6_0_", Collections.singletonList("foo"));
             single.addColumn("bar1_2_0_", Collections.singletonList("bar"));
             single.addColumn("goo1_0_0_", Collections.singletonList("goo"));
-            handler.prepareResultSet("select beagle0_.id as id1_5_0_, beagle0_2_.foo as foo2_5_0_, beagle0_1_.bar as bar1_2_0_, beagle0_.goo as goo1_0_0_ from Beagle beagle0_ inner join Dog beagle0_1_ on beagle0_.id=beagle0_1_.id inner join Mammal beagle0_2_ on beagle0_.id=beagle0_2_.id where beagle0_.id=\\?", single);
+            handler.prepareResultSet("select beagle0_\\.id as id1_5_0_, beagle0_2_\\.foo as foo2_5_0_, beagle0_1_\\.bar as bar1_2_0_, beagle0_\\.goo as goo1_0_0_ from Beagle beagle0_ inner join Dog beagle0_1_ on beagle0_\\.id=beagle0_1_\\.id inner join Mammal beagle0_2_ on beagle0_\\.id=beagle0_2_\\.id where beagle0_\\.id=\\?", single);
+            handler.prepareResultSet("select beagle0_\\.id as id1_6_0_, beagle0_2_\\.foo as foo2_6_0_, beagle0_1_\\.bar as bar1_2_0_, beagle0_\\.goo as goo1_0_0_ from Beagle beagle0_ inner join Dog beagle0_1_ on beagle0_\\.id=beagle0_1_\\.id inner join Mammal beagle0_2_ on beagle0_\\.id=beagle0_2_\\.id where beagle0_\\.id=\\?", single);
 
             handler.prepareUpdateCount("insert into Mammal \\(foo, id\\) values \\(\\?, \\?\\)", 1);
             handler.prepareGeneratedKeys("insert into Mammal \\(id, foo\\) values \\(null, \\?\\)", getIncrementing(dbSize));
@@ -75,7 +78,7 @@ public class DogBenchmark extends BenchmarkBase<Beagle> {
             criteriaRead.addColumn("foo2_5_", list(transactionSize, "foo"));
             criteriaRead.addColumn("bar1_2_", list(transactionSize, "bar"));
             criteriaRead.addColumn("goo1_0_", list(transactionSize, "goo"));
-            handler.prepareResultSet("select beagle0_.id as id1_5_, beagle0_2_.foo as foo2_5_, beagle0_1_.bar as bar1_2_, beagle0_.goo as goo1_0_ from Beagle beagle0_ inner join Dog beagle0_1_ on beagle0_.id=beagle0_1_.id inner join Mammal beagle0_2_ on beagle0_.id=beagle0_2_.id where beagle0_.id in \\(.*\\)", criteriaRead);
+            handler.prepareResultSet("select beagle0_\\.id as id1_5_, beagle0_2_\\.foo as foo2_5_, beagle0_1_\\.bar as bar1_2_, beagle0_\\.goo as goo1_0_ from Beagle beagle0_ inner join Dog beagle0_1_ on beagle0_\\.id=beagle0_1_\\.id inner join Mammal beagle0_2_ on beagle0_\\.id=beagle0_2_\\.id where beagle0_\\.id in \\(.*\\)", criteriaRead);
         }
     }
 

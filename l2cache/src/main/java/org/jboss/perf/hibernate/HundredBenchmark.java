@@ -50,14 +50,14 @@ public class HundredBenchmark extends BenchmarkBase {
 
          MockResultSet all = handler.createResultSet();
          all.addColumn("col_0_0_", seq(0, dbSize));
-         handler.prepareResultSet("select hundred0_.id as col_0_0_ from Hundred hundred0_", all);
+         handler.prepareResultSet("select hundred0_\\.id as col_0_0_ from Hundred hundred0_", all);
 
          MockResultSet single = handler.createResultSet();
          single.addColumn("id1_5_0_", Collections.singletonList(0));
          for (int i = 0; i < 100; ++i) {
             single.addColumn(String.format("p%d_5_0_", i + 2), Collections.singletonList(0));
          }
-         handler.prepareResultSet("select hundred0_.id as id1_5_0_,.* where hundred0_.id=\\?", single);
+         handler.prepareResultSet("select hundred0_\\.id as id1_5_0_,.* where hundred0_\\.id=\\?", single);
 
          MockResultSet many = handler.createResultSet();
          many.addColumn("id1_5_", seq(0, 10));
@@ -65,7 +65,7 @@ public class HundredBenchmark extends BenchmarkBase {
          for (int i = 0; i < 100; ++i) {
             many.addColumn(String.format("p%d_5_", i + 2), zeroes);
          }
-         handler.prepareResultSet("select hundred0_.id as id1_5_,.* where hundred0_.id in .*", many);
+         handler.prepareResultSet("select hundred0_\\.id as id1_5_,.* where hundred0_\\.id in .*", many);
 
          handler.prepareGeneratedKeys("insert into Hundred .*", getIncrementing(dbSize));
          handler.prepareUpdateCount("update Hundred set .* where id=\\?", 1);

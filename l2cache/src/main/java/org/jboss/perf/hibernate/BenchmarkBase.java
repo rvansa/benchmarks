@@ -15,10 +15,8 @@ import java.util.function.Supplier;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.EntityTransaction;
-import javax.persistence.OptimisticLockException;
 import javax.persistence.Persistence;
 import javax.persistence.PersistenceUnitUtil;
-import javax.persistence.PessimisticLockException;
 import javax.persistence.SharedCacheMode;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaDelete;
@@ -32,8 +30,10 @@ import javax.persistence.metamodel.SingularAttribute;
 import javax.transaction.Status;
 import javax.transaction.TransactionManager;
 
+import com.mockrunner.jdbc.ResultSetFactory;
 import com.mockrunner.jdbc.PreparedStatementResultSetHandler;
 import com.mockrunner.mock.jdbc.MockResultSet;
+import com.mockrunner.util.regexp.StartsEndsPatternMatcher;
 import org.hibernate.annotations.CacheConcurrencyStrategy;
 import org.hibernate.cache.infinispan.InfinispanRegionFactory;
 import org.hibernate.cfg.AvailableSettings;
@@ -172,8 +172,11 @@ public abstract class BenchmarkBase<T> {
 
         public void setupMock() {
             PreparedStatementResultSetHandler handler = PerfMockDriver.getInstance().getPreparedStatementHandler();
+            // case-sensitive comparison is more performant
+            handler.setResultSetFactory(new ResultSetFactory.Default(true));
             // we need regexp for the select ... where x in ( ... )
-            handler.setUseRegularExpressions(true);
+//            handler.setUseRegularExpressions(true);
+            handler.setPatternMatcherFactory(new StartsEndsPatternMatcher.Factory());
 
             handler.prepareResultSet("call next value for hibernate_sequence", getIncrementing(dbSize));
 
@@ -190,6 +193,7 @@ public abstract class BenchmarkBase<T> {
 
         protected MockResultSet getIncrementing(int initialValue) {
             MockResultSet newId = new FunctionalMockResultSet("newId");
+            newId.setColumnsCaseSensitive(true);
             AtomicLong counter = new AtomicLong(initialValue);
             newId.addRow(Collections.<Object>singletonList((Supplier) counter::getAndIncrement));
             return newId;

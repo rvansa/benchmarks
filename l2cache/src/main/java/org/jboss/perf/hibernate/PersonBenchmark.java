@@ -64,7 +64,7 @@ public class PersonBenchmark extends BenchmarkBase<Person> {
             readPerson.addColumn("firstNam2_7_0_", Collections.singletonList("firstName"));
             readPerson.addColumn("lastName3_7_0_", Collections.singletonList("lastName"));
             readPerson.addColumn("middleNa4_7_0_", Collections.singletonList("middleName"));
-            handler.prepareResultSet("select person0_.id as id1_7_0_, person0_.firstName as firstNam2_7_0_, person0_.lastName as lastName3_7_0_, person0_.middleName as middleNa4_7_0_ from Person person0_ where person0_.id=\\?", readPerson);
+            handler.prepareResultSet("select person0_\\.id as id1_7_0_, person0_\\.firstName as firstNam2_7_0_, person0_\\.lastName as lastName3_7_0_, person0_\\.middleName as middleNa4_7_0_ from Person person0_ where person0_\\.id=\\?", readPerson);
 
             handler.prepareUpdateCount("update Person set firstName=\\?, lastName=\\?, middleName=\\? where id=\\?", 1);
 
@@ -75,7 +75,7 @@ public class PersonBenchmark extends BenchmarkBase<Person> {
             readPersons.addColumn("firstNam2_7_", list(transactionSize, "firstName"));
             readPersons.addColumn("lastName3_7_", list(transactionSize, "lastName"));
             readPersons.addColumn("middleNa4_7_", list(transactionSize, "middleName"));
-            handler.prepareResultSet("select person0_.id as id1_7_, person0_.firstName as firstNam2_7_, person0_.lastName as lastName3_7_, person0_.middleName as middleNa4_7_ from Person person0_ where person0_.id in \\(.*\\)", readPersons);
+            handler.prepareResultSet("select person0_\\.id as id1_7_, person0_\\.firstName as firstNam2_7_, person0_\\.lastName as lastName3_7_, person0_\\.middleName as middleNa4_7_ from Person person0_ where person0_\\.id in \\(.*\\)", readPersons);
 
             handler.prepareUpdateCount("delete from Person where id in \\(.*\\)", transactionSize);
         }

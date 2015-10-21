@@ -49,10 +49,11 @@ public class EmployerBenchmark extends BenchmarkBase<Employer> {
         public void setupMock() {
             super.setupMock();
             PreparedStatementResultSetHandler handler = PerfMockDriver.getInstance().getPreparedStatementHandler();
+            EvaluableResultSet.Factory evaluableResultSetFactory = new EvaluableResultSet.Factory(true);
 
             MockResultSet all = handler.createResultSet();
             all.addColumn("col_0_0_", seq(0, dbSize));
-            handler.prepareResultSet("select employer0_.id as col_0_0_ from Employer employer0_", all);
+            handler.prepareResultSet("select employer0_\\.id as col_0_0_ from Employer employer0_", all);
 
             handler.prepareUpdateCount("insert into Employer \\(name, id\\) values \\(\\?, \\?\\)", 1);
             handler.prepareUpdateCount("insert into Employee \\(employer_id, name, id\\) values \\(\\?, \\?, \\?\\)", 1);
@@ -62,9 +63,9 @@ public class EmployerBenchmark extends BenchmarkBase<Employer> {
             MockResultSet single = handler.createResultSet();
             single.addColumn("id1_4_0_", Collections.singletonList(1L));
             single.addColumn("name2_4_0_", Collections.singletonList("employer"));
-            handler.prepareResultSet("select employer0_.id as id1_4_0_, employer0_.name as name2_4_0_ from Employer employer0_ where employer0_.id=\\?", single);
+            handler.prepareResultSet("select employer0_\\.id as id1_4_0_, employer0_\\.name as name2_4_0_ from Employer employer0_ where employer0_\\.id=\\?", single);
 
-            EvaluableResultSet withEmployees = new EvaluableResultSet("withEmployees");
+            EvaluableResultSet withEmployees = evaluableResultSetFactory.create("withEmployees");
             List<Object> idList = list(10, (EvaluableResultSet.Evaluable) (sql, parameters, columnName, row) -> parameters.get(1));
             List<Object> idSeq = seq(0, 10);
             withEmployees.addColumn("id1_4_0_", idList);
@@ -75,22 +76,22 @@ public class EmployerBenchmark extends BenchmarkBase<Employer> {
             withEmployees.addColumn("id1_3_2_", idSeq);
             withEmployees.addColumn("employer3_3_2_", idList);
             withEmployees.addColumn("name2_3_2_", list(10, "employee"));
-            handler.prepareResultSet("select employer0_.id as id1_4_0_, employer0_.name as name2_4_0_, employees1_.employer_id as employer3_._1_, "
-                  + "employees1_.id as id1_3_1_, employees1_.id as id1_3_2_, employees1_.employer_id as employer3_3_2_, employees1_.name as name2_3_2_ "
-                  + "from Employer employer0_ left outer join Employee employees1_ on employer0_.id=employees1_.employer_id where employer0_.id=\\?", withEmployees);
+            handler.prepareResultSet("select employer0_\\.id as id1_4_0_, employer0_\\.name as name2_4_0_, employees1_\\.employer_id as employer3_._1_, "
+                  + "employees1_\\.id as id1_3_1_, employees1_\\.id as id1_3_2_, employees1_\\.employer_id as employer3_3_2_, employees1_\\.name as name2_3_2_ "
+                  + "from Employer employer0_ left outer join Employee employees1_ on employer0_\\.id=employees1_\\.employer_id where employer0_\\.id=\\?", withEmployees);
 
 
-            EvaluableResultSet employee = new EvaluableResultSet("employees");
+            EvaluableResultSet employee = evaluableResultSetFactory.create("employees");
             employee.addColumn("employer3_4_0_", idList);
             employee.addColumn("employer3_3_0_", idList);
             employee.addColumn("id1_3_0_", idSeq);
             employee.addColumn("id1_3_1_", idSeq);
             employee.addColumn("employer3_3_1_", idList);
             employee.addColumn("name2_3_1_", list(10, "employee"));
-            handler.prepareResultSet("select employees0_.employer_id as employer3_._0_, employees0_.id as id1_3_0_, employees0_.id as id1_3_1_, "
-                  + "employees0_.employer_id as employer3_3_1_, employees0_.name as name2_3_1_ from Employee employees0_ where employees0_.employer_id=\\?", employee);
+            handler.prepareResultSet("select employees0_\\.employer_id as employer3_._0_, employees0_\\.id as id1_3_0_, employees0_\\.id as id1_3_1_, "
+                  + "employees0_\\.employer_id as employer3_3_1_, employees0_\\.name as name2_3_1_ from Employee employees0_ where employees0_\\.employer_id=\\?", employee);
 
-            EvaluableResultSet employers = new EvaluableResultSet("employers");
+            EvaluableResultSet employers = evaluableResultSetFactory.create("employers");
             employers.addColumn("id1_4_", list(10, (EvaluableResultSet.Evaluable) (sql, parameters, columnName, row) -> {
                 int openParIndex = sql.indexOf('(');
                 int closeParIndex = sql.lastIndexOf(')');
