@@ -5,7 +5,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import javax.persistence.EntityManager;
 import javax.persistence.LockModeType;
@@ -14,16 +18,21 @@ import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.Path;
 import javax.persistence.criteria.Root;
 
+import com.mockrunner.jdbc.PreparedStatementResultSetHandler;
+import com.mockrunner.mock.jdbc.EvaluableResultSet;
+import com.mockrunner.mock.jdbc.MockResultSet;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
 import org.jboss.perf.hibernate.model.Constant;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Group;
 import org.openjdk.jmh.annotations.GroupThreads;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.infra.ThreadParams;
+import org.perfmock.PerfMockDriver;
 
 /**
  * @author Radim Vansa &lt;rvansa@redhat.com&gt;
@@ -31,8 +40,16 @@ import org.openjdk.jmh.infra.ThreadParams;
 public class ConstantBenchmark extends BenchmarkBase<Constant> {
     private final static int QUERY_MAX_RESULTS = 1000;
 
+    @State(Scope.Benchmark)
     public static class ConstantState extends BenchmarkState<Constant> {
         private AtomicReferenceArray loadedIds;
+        private ScheduledExecutorService mutator = Executors.newScheduledThreadPool(1);
+
+        @Param({ "100" })
+        public long mutationPeriod;
+
+        @Param({ "1000" })
+        public int mutationCount;
 
         @Override
         protected Map<String, String> getSecondLevelCacheProperties() {
@@ -47,6 +64,17 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
         public void setup() throws Throwable {
             super.setup();
             loadedIds = new AtomicReferenceArray(dbSize);
+            for (int i = 0; i < dbSize; ++i) {
+                loadedIds.set(i, (long) i);
+            }
+            AtomicLong nextId = new AtomicLong(dbSize);
+            /*mutator.scheduleAtFixedRate(() -> {
+                ThreadLocalRandom random = ThreadLocalRandom.current();
+                for (int i = 0; i < mutationCount; ++i) {
+                    loadedIds.set(random.nextInt(dbSize), nextId.incrementAndGet());
+                }
+                System.err.print("@");
+            }, 0, mutationPeriod, TimeUnit.MILLISECONDS);*/
         }
 
         private boolean first = true;
@@ -63,6 +91,7 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
         public void shutdown() throws Throwable {
 //            Statistics stats = getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
 //            System.err.println(stats);
+            mutator.shutdown();
             super.shutdown();
         }
 
@@ -103,6 +132,21 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
         public synchronized void replaceId(int index, Long newId) {
             regularIds.set(index, newId);
         }
+
+        @Override
+        public void setupMock() {
+            super.setupMock();
+            PreparedStatementResultSetHandler handler = PerfMockDriver.getInstance().getPreparedStatementHandler();
+
+            MockResultSet all = handler.createResultSet();
+            all.addColumn("col_0_0_", seq(0, dbSize));
+            handler.prepareResultSet("select constant0_\\.id as col_0_0_ from Constant constant0_", all);
+
+            MockResultSet single = handler.createResultSet();
+            single.addColumn("id1_1_0_", new Object[] { 0L });
+            single.addColumn("value2_1_0_", new Object[] { "foo" });
+            handler.prepareResultSet("select constant0_\\.id as id1_1_0_, constant0_\\.value as value2_1_0_ from Constant constant0_ where constant0_.id=\\?", single);
+        }
     }
 
     @Override
@@ -125,8 +169,8 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
         }
     }
 
-    @Group
-    @GroupThreads(1)
+//    @Group
+//    @GroupThreads(1)
     @Benchmark
     public void updater(ConstantState benchmarkState, UpdaterState updaterState) throws Exception {
         ArrayList<Object> newIds = new ArrayList<Object>();
@@ -211,13 +255,15 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
         }
     }
 
-    @Group
-    @GroupThreads(10)
+//    @Group
+//    @GroupThreads(10)
     @Benchmark
     public void testRead(ConstantState benchmarkState, ThreadState threadState, Blackhole blackhole) throws Exception {
         EntityManager entityManager = benchmarkState.getEntityManagerFactory().createEntityManager();
         try {
-            benchmarkState.beginTransaction(entityManager);
+            if (benchmarkState.useTx) {
+                benchmarkState.beginTransaction(entityManager);
+            }
             try {
                 for (int i = 0; i < benchmarkState.transactionSize; ++i) {
                     Object id = getIdNotNull(benchmarkState.loadedIds, threadState.random.nextInt(benchmarkState.dbSize));
@@ -227,7 +273,9 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
                     }
                     blackhole.consume(entity);
                 }
-                benchmarkState.commitTransaction(entityManager);
+                if (benchmarkState.useTx) {
+                    benchmarkState.commitTransaction(entityManager);
+                }
             } catch (Exception e) {
                 log(e);
                 benchmarkState.rollbackTransaction(entityManager);
@@ -238,8 +286,8 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
         }
     }
 
-    @Group
-    @GroupThreads(2)
+//    @Group
+//    @GroupThreads(2)
     @Benchmark
     public void mutate(ConstantState benchmarkState, ThreadState threadState, ThreadParams threadParams, Blackhole blackhole) throws Exception {
         EntityManager entityManager = benchmarkState.getEntityManagerFactory().createEntityManager();

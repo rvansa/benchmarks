@@ -63,10 +63,13 @@ public abstract class BenchmarkBase<T> {
         l2Properties.put(AvailableSettings.CACHE_REGION_FACTORY, InfinispanRegionFactory.class.getName());
         l2Properties.put(InfinispanRegionFactory.INFINISPAN_CONFIG_RESOURCE_PROP, "second-level-cache-cfg.xml");
         l2Properties.put(AvailableSettings.USE_SECOND_LEVEL_CACHE, "true");
-//        l2Properties.put(AvailableSettings.USE_QUERY_CACHE, "true");
-        l2Properties.put(AvailableSettings.USE_QUERY_CACHE, "false");
-        //l2Properties.put(AvailableSettings.DEFAULT_CACHE_CONCURRENCY_STRATEGY, CacheConcurrencyStrategy.READ_ONLY.toAccessType().getExternalName());
-        l2Properties.put(AvailableSettings.DEFAULT_CACHE_CONCURRENCY_STRATEGY, CacheConcurrencyStrategy.TRANSACTIONAL.toAccessType().getExternalName());
+        l2Properties.put(AvailableSettings.USE_QUERY_CACHE, "true");
+//        l2Properties.put(AvailableSettings.USE_QUERY_CACHE, "false");
+        l2Properties.put(AvailableSettings.USE_DIRECT_REFERENCE_CACHE_ENTRIES, "true");
+        l2Properties.put(AvailableSettings.USE_MINIMAL_PUTS, "true");
+        l2Properties.put(AvailableSettings.ENABLE_LAZY_LOAD_NO_TRANS, "true");
+        l2Properties.put(AvailableSettings.DEFAULT_CACHE_CONCURRENCY_STRATEGY, CacheConcurrencyStrategy.READ_ONLY.toAccessType().getExternalName());
+//        l2Properties.put(AvailableSettings.DEFAULT_CACHE_CONCURRENCY_STRATEGY, CacheConcurrencyStrategy.TRANSACTIONAL.toAccessType().getExternalName());
         l2Properties.put("hibernate.transaction.manager_lookup_class", "org.hibernate.transaction.JBossTransactionManagerLookup");
 
         nonCachedProperties.put(AvailableSettings.USE_SECOND_LEVEL_CACHE, "false");
@@ -111,6 +114,9 @@ public abstract class BenchmarkBase<T> {
 
         @Param({ "none", "tx"})
         String secondLevelCache;
+
+        @Param({ "true" })
+        boolean useTx;
 
         private JndiHelper jndiHelper = new JndiHelper();
         private JtaHelper jtaHelper = new JtaHelper();
@@ -231,6 +237,9 @@ public abstract class BenchmarkBase<T> {
                     }
                     Collections.sort(regularIds);
                     System.out.printf("Registered %d existing entities\n", regularIds.size());
+                } catch (Exception e) {
+                    log(e);
+                    throw e;
                 } finally {
                     commitTransaction(entityManager);
                 }
@@ -568,7 +577,9 @@ public abstract class BenchmarkBase<T> {
     protected void testRead(BenchmarkState<T> benchmarkState, ThreadState threadState, Blackhole blackhole) throws Exception {
         EntityManager entityManager = benchmarkState.entityManagerFactory.createEntityManager();
         try {
-            benchmarkState.beginTransaction(entityManager);
+            if (benchmarkState.useTx) {
+                benchmarkState.beginTransaction(entityManager);
+            }
             try {
                 for (Long id : randomIds(benchmarkState, threadState.random)) {
                     T entity = entityManager.find(benchmarkState.getClazz(), id);
@@ -577,10 +588,14 @@ public abstract class BenchmarkBase<T> {
                     }
                     blackhole.consume(entity);
                 }
-                benchmarkState.commitTransaction(entityManager);
+                if (benchmarkState.useTx) {
+                    benchmarkState.commitTransaction(entityManager);
+                }
             } catch (Exception e) {
                 log(e);
-                benchmarkState.rollbackTransaction(entityManager);
+                if (benchmarkState.useTx) {
+                    benchmarkState.rollbackTransaction(entityManager);
+                }
                 throw e;
             }
         } finally {
