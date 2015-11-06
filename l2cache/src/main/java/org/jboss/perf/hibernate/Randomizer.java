@@ -4,8 +4,6 @@ import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * // TODO: Document this
- *
  * @author Radim Vansa &lt;rvansa@redhat.com&gt;
  */
 public class Randomizer {

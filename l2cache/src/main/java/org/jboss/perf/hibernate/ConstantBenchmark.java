@@ -35,6 +35,13 @@ import org.openjdk.jmh.infra.ThreadParams;
 import org.perfmock.PerfMockDriver;
 
 /**
+ * This benchmark is now set up to use mocking. You can switch mutation
+ * with mutate=true|false params. If used without mocking you need to execute
+ * the mutations against the DB and update set of ids; for that, set mutate=false
+ * and uncomment the annotations on {@link #updater(ConstantState, UpdaterState)},
+ * {@link #mutate(ConstantState, ThreadState, ThreadParams, Blackhole)} and
+ * {@link #testRead(ConstantState, ThreadState, Blackhole)} methods.
+ *
  * @author Radim Vansa &lt;rvansa@redhat.com&gt;
  */
 public class ConstantBenchmark extends BenchmarkBase<Constant> {
@@ -46,10 +53,13 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
         private ScheduledExecutorService mutator = Executors.newScheduledThreadPool(1);
 
         @Param({ "100" })
-        public long mutationPeriod;
+        long mutationPeriod;
 
         @Param({ "1000" })
-        public int mutationCount;
+        int mutationCount;
+
+        @Param("true")
+        boolean mutate;
 
         @Override
         protected Map<String, String> getSecondLevelCacheProperties() {
@@ -68,13 +78,14 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
                 loadedIds.set(i, (long) i);
             }
             AtomicLong nextId = new AtomicLong(dbSize);
-            /*mutator.scheduleAtFixedRate(() -> {
-                ThreadLocalRandom random = ThreadLocalRandom.current();
-                for (int i = 0; i < mutationCount; ++i) {
-                    loadedIds.set(random.nextInt(dbSize), nextId.incrementAndGet());
-                }
-                System.err.print("@");
-            }, 0, mutationPeriod, TimeUnit.MILLISECONDS);*/
+            if (mutate) {
+                mutator.scheduleAtFixedRate(() -> {
+                    ThreadLocalRandom random = ThreadLocalRandom.current();
+                    for (int i = 0; i < mutationCount; ++i) {
+                        loadedIds.set(random.nextInt(dbSize), nextId.incrementAndGet());
+                    }
+                }, 0, mutationPeriod, TimeUnit.MILLISECONDS);
+            }
         }
 
         private boolean first = true;
@@ -89,8 +100,6 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
 
         @Override
         public void shutdown() throws Throwable {
-//            Statistics stats = getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
-//            System.err.println(stats);
             mutator.shutdown();
             super.shutdown();
         }
@@ -171,7 +180,7 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
 
 //    @Group
 //    @GroupThreads(1)
-    @Benchmark
+//    @Benchmark
     public void updater(ConstantState benchmarkState, UpdaterState updaterState) throws Exception {
         ArrayList<Object> newIds = new ArrayList<Object>();
         boolean[] found = new boolean[benchmarkState.loadedIds.length()];
@@ -225,12 +234,11 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
             }
             newIdsIndex++;
         }
-        if (newIdsIndex < newIds.size()) {
-            //log.debugf("Finished dirty update, %d new entities ignored", newIds.size() - newIdsIndex);
-        } else {
-            //log.debugf("Finished dirty update, %d left empty", newIdsIndex - newIds.size());
-        }
-
+//        if (newIdsIndex < newIds.size()) {
+//            log.debugf("Finished dirty update, %d new entities ignored", newIds.size() - newIdsIndex);
+//        } else {
+//            log.debugf("Finished dirty update, %d left empty", newIdsIndex - newIds.size());
+//        }
     }
 
     private List<Object> dirtyList(ConstantState benchmarkState, EntityManager entityManager, int offset, int maxResults) {
@@ -288,7 +296,7 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
 
 //    @Group
 //    @GroupThreads(2)
-    @Benchmark
+//    @Benchmark
     public void mutate(ConstantState benchmarkState, ThreadState threadState, ThreadParams threadParams, Blackhole blackhole) throws Exception {
         EntityManager entityManager = benchmarkState.getEntityManagerFactory().createEntityManager();
         try {
@@ -314,35 +322,4 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
             entityManager.close();
         }
     }
-
-    /*static Logger log = Logger.getLogger(ConstantBenchmark.class);
-
-    @Benchmark
-    public void rollbackOnly(ConstantState benchmarkState) throws Exception{
-        EntityManager entityManager = benchmarkState.getEntityManagerFactory().createEntityManager();
-        try {
-            log.info("BEFORE ALL");
-            benchmarkState.beginTransaction(entityManager);
-            Constant foo = new Constant("FOO").setId(1);
-            log.info("BEFORE PERSIST FOO");
-            entityManager.persist(foo);
-            log.info("AFTER PERSIST FOO");
-            benchmarkState.commitTransaction(entityManager);
-            log.info("AFTER COMMIT FOO");
-
-            benchmarkState.beginTransaction(entityManager);
-            Constant bar = new Constant("BAR").setId(2);
-            log.info("BEFORE PERSIST BAR");
-            entityManager.persist(bar);
-            log.info("AFTER PERSIST BAR");
-            benchmarkState.rollbackTransaction(entityManager);
-            log.info("AFTER ROLLBACK BAR");
-
-            benchmarkState.beginTransaction(entityManager);
-            System.err.println("FOO is : " + entityManager.find(Constant.class, foo.getId()) + ", BAR is : " + entityManager.find(Constant.class, bar.getId()));
-            benchmarkState.commitTransaction(entityManager);
-        } finally {
-            entityManager.close();
-        }
-    }*/
 }

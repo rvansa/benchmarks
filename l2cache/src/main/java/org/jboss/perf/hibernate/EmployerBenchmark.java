@@ -102,7 +102,13 @@ public class EmployerBenchmark extends BenchmarkBase<Employer> {
                 return ids[row].trim(); // row index is 1-based
             }));
             employers.addColumn("name2_4_", list(10, "employer"));
-            handler.prepareResultSet("select employer0_.id as id1_4_, employer0_.name as name2_4_ from Employer employer0_ where employer0_.id in \\(.*\\)", employers);
+            handler.prepareResultSet("select employer0_\\.id as id1_4_, employer0_\\.name as name2_4_ from Employer employer0_ where employer0_\\.id in \\(.*\\)", employers);
+
+            MockResultSet queryResult = handler.createResultSet();
+            queryResult.addColumn("id1_4_", new Object[] { 0 });
+            queryResult.addColumn("name2_4_", new Object[] { "employer" });
+            handler.prepareResultSet("select employer0_\\.id as id1_4_, employer0_\\.name as name2_4_ from Employer employer0_ inner join Employee employees1_ " +
+                  "on employer0_\\.id=employees1_\\.employer_id where employees1_\\.name like \\?", queryResult);
 
             handler.prepareUpdateCount("update Employee set employer_id=\\?, name=\\? where id=\\?", 1);
             handler.prepareUpdateCount("delete from Employer where id=\\?", 1);

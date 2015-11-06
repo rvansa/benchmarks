@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * // TODO: Document this
+ * Designed to test enhanced/non-enhanced entities.
  *
  * @author Radim Vansa &lt;rvansa@redhat.com&gt;
  */

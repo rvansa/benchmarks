@@ -18,8 +18,6 @@ import org.jboss.shrinkwrap.api.spec.ResourceAdapterArchive;
 import org.jnp.server.Main;
 
 /**
- * // TODO: Document this
- *
  * @author Radim Vansa &lt;rvansa@redhat.com&gt;
  */
 public class JacamarHelper {

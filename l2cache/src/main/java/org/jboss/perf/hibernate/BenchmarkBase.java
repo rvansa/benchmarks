@@ -15,8 +15,10 @@ import java.util.function.Supplier;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.EntityTransaction;
+import javax.persistence.OptimisticLockException;
 import javax.persistence.Persistence;
 import javax.persistence.PersistenceUnitUtil;
+import javax.persistence.PessimisticLockException;
 import javax.persistence.SharedCacheMode;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaDelete;
@@ -34,8 +36,9 @@ import com.mockrunner.jdbc.ResultSetFactory;
 import com.mockrunner.jdbc.PreparedStatementResultSetHandler;
 import com.mockrunner.mock.jdbc.MockResultSet;
 import com.mockrunner.util.regexp.StartsEndsPatternMatcher;
-import org.hibernate.annotations.CacheConcurrencyStrategy;
+import org.hibernate.Version;
 import org.hibernate.cache.infinispan.InfinispanRegionFactory;
+import org.hibernate.cache.spi.access.AccessType;
 import org.hibernate.cfg.AvailableSettings;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Param;
@@ -49,31 +52,15 @@ import org.perfmock.FunctionalMockResultSet;
 import org.perfmock.PerfMockDriver;
 
 public abstract class BenchmarkBase<T> {
-    private static final Map<String, String> l2Properties = new HashMap<String, String>();
-    private static final Map<String, String> nonCachedProperties = new HashMap<String, String>();
-    private static final boolean printStackTraces = Boolean.valueOf(System.getProperty("printStackTraces", "true"));
+    private static final Map<String, String> NON_CACHED_PROPERTIES = new HashMap<String, String>();
+    private static final boolean PRINT_STACK_TRACES = Boolean.valueOf(System.getProperty("printStackTraces", "true"));
+    private static final boolean THROW_ON_LOCK_EXCEPTIONS = Boolean.valueOf(System.getProperty("throwOnLockExceptions", "true"));
+    private static final int HIBERNATE_VERSION;
 
     static {
-//        l2Properties.put("javax.persistence.sharedCache.mode", SharedCacheMode.ALL.toString());
-        l2Properties.put(org.hibernate.jpa.AvailableSettings.SHARED_CACHE_MODE, SharedCacheMode.ALL.toString());
-        //properties.put(AvailableSettings.TRANSACTION_TYPE, PersistenceUnitTransactionType.JTA.toString());
-        //properties.put("hibernate.transaction.factory_class", JdbcTransactionFactory.class.getName());
-        //properties.put("hibernate.transaction.factory_class", JtaTransactionFactory.class.getName());
-        //properties.put(Environment.JTA_PLATFORM, "org.hibernate.service.jta.platform.internal.JBossStandAloneJtaPlatform");
-        l2Properties.put(AvailableSettings.CACHE_REGION_FACTORY, InfinispanRegionFactory.class.getName());
-        l2Properties.put(InfinispanRegionFactory.INFINISPAN_CONFIG_RESOURCE_PROP, "second-level-cache-cfg.xml");
-        l2Properties.put(AvailableSettings.USE_SECOND_LEVEL_CACHE, "true");
-        l2Properties.put(AvailableSettings.USE_QUERY_CACHE, "true");
-//        l2Properties.put(AvailableSettings.USE_QUERY_CACHE, "false");
-        l2Properties.put(AvailableSettings.USE_DIRECT_REFERENCE_CACHE_ENTRIES, "true");
-        l2Properties.put(AvailableSettings.USE_MINIMAL_PUTS, "true");
-        l2Properties.put(AvailableSettings.ENABLE_LAZY_LOAD_NO_TRANS, "true");
-        l2Properties.put(AvailableSettings.DEFAULT_CACHE_CONCURRENCY_STRATEGY, CacheConcurrencyStrategy.READ_ONLY.toAccessType().getExternalName());
-//        l2Properties.put(AvailableSettings.DEFAULT_CACHE_CONCURRENCY_STRATEGY, CacheConcurrencyStrategy.TRANSACTIONAL.toAccessType().getExternalName());
-        l2Properties.put("hibernate.transaction.manager_lookup_class", "org.hibernate.transaction.JBossTransactionManagerLookup");
-
-        nonCachedProperties.put(AvailableSettings.USE_SECOND_LEVEL_CACHE, "false");
-
+        String[] hv = Version.getVersionString().replaceAll("[^0-9.]", "").split("\\.");
+        HIBERNATE_VERSION = Integer.parseInt(hv[0]) * 10000 + Integer.parseInt(hv[1]) * 100 + Integer.parseInt(hv[2]);
+        NON_CACHED_PROPERTIES.put(AvailableSettings.USE_SECOND_LEVEL_CACHE, "false");
         PerfMockDriver.getInstance(); // make sure PerfMockDriver is classloaded
     }
 
@@ -93,14 +80,13 @@ public abstract class BenchmarkBase<T> {
     }
 
     protected static void log(Throwable t) {
-        if (printStackTraces) t.printStackTrace();
+        if (PRINT_STACK_TRACES) t.printStackTrace();
     }
 
     @State(Scope.Benchmark)
     public abstract static class BenchmarkState<T> {
 
-//        @Param({C3P0, HIKARI, IRON_JACAMAR + ".local", IRON_JACAMAR + ".xa"})
-        @Param({ C3P0 + ".mock", HIKARI + ".mock", IRON_JACAMAR + ".mock.local", IRON_JACAMAR + ".mock.xa"})
+        @Param(C3P0 + ".mock")
         String persistenceUnit;
 
         @Param("10000")
@@ -112,11 +98,23 @@ public abstract class BenchmarkBase<T> {
         @Param("10")
         int transactionSize;
 
-        @Param({ "none", "tx"})
+        @Param("none")
         String secondLevelCache;
 
-        @Param({ "true" })
+        @Param("true")
         boolean useTx;
+
+        @Param("true")
+        boolean queryCache;
+
+        @Param("true")
+        boolean directReferenceEntries;
+
+        @Param("false")
+        boolean minimalPuts;
+
+        @Param("false")
+        boolean lazyLoadNoTrans;
 
         private JndiHelper jndiHelper = new JndiHelper();
         private JtaHelper jtaHelper = new JtaHelper();
@@ -140,7 +138,9 @@ public abstract class BenchmarkBase<T> {
 
         @Setup
         public void setup() throws Throwable {
-            setupMock();
+            if (persistenceUnit.contains("mock")) {
+                setupMock();
+            }
             tm.setTransactionTimeout(1200);
             try {
                 if (persistenceUnit.startsWith(IRON_JACAMAR)) {
@@ -150,12 +150,12 @@ public abstract class BenchmarkBase<T> {
                     jndiHelper.start();
                     jtaHelper.start();
                 }
-//                if (useL2Cache) {
+                if (!secondLevelCache.equals("none") && HIBERNATE_VERSION >= 50002) {
                     // we always need managed transactions with 2LC since there are multiple participants
-//                    managedTransaction = true;
-//                }
+                    managedTransaction = true;
+                }
                 entityManagerFactory = Persistence.createEntityManagerFactory(persistenceUnit,
-                      secondLevelCache.equals("none") ? nonCachedProperties : getSecondLevelCacheProperties());
+                      secondLevelCache.equals("none") ? NON_CACHED_PROPERTIES : getSecondLevelCacheProperties());
                 persistenceUnitUtil = entityManagerFactory.getPersistenceUnitUtil();
                 regularIds = new ArrayList<Long>(dbSize);
                 Metamodel metamodel = entityManagerFactory.getMetamodel();
@@ -168,12 +168,13 @@ public abstract class BenchmarkBase<T> {
                     }
                 }
                 entityName = entityManagerFactory.getMetamodel().entity(getClazz()).getName();
-                PerfMockDriver.getInstance().setMocking(true);
+                if (persistenceUnit.contains("mock")) {
+                    PerfMockDriver.getInstance().setMocking(true);
+                }
             } catch (Throwable t) {
                 log(t);
                 throw t;
             }
-            System.err.println("setup() finished");
         }
 
         public void setupMock() {
@@ -181,7 +182,6 @@ public abstract class BenchmarkBase<T> {
             // case-sensitive comparison is more performant
             handler.setResultSetFactory(new ResultSetFactory.Default(true));
             // we need regexp for the select ... where x in ( ... )
-//            handler.setUseRegularExpressions(true);
             handler.setPatternMatcherFactory(new StartsEndsPatternMatcher.Factory());
 
             handler.prepareResultSet("call next value for hibernate_sequence", getIncrementing(dbSize));
@@ -206,7 +206,45 @@ public abstract class BenchmarkBase<T> {
         }
 
         protected Map<String, String> getSecondLevelCacheProperties() {
-            return new HashMap<>(l2Properties);
+            Map<String, String> l2Properties = new HashMap<>();
+            if (HIBERNATE_VERSION >= 50002) {
+                // In Hibernate 5.0.2+ we don't need the transactions and can use Infinispan 8.0
+                l2Properties.put(InfinispanRegionFactory.INFINISPAN_CONFIG_RESOURCE_PROP, "2lc-cfg-80.xml");
+            } else {
+                l2Properties.put(InfinispanRegionFactory.INFINISPAN_CONFIG_RESOURCE_PROP, "2lc-cfg-71.xml");
+            }
+            l2Properties.put(org.hibernate.jpa.AvailableSettings.SHARED_CACHE_MODE, SharedCacheMode.ALL.toString());
+            //properties.put(AvailableSettings.TRANSACTION_TYPE, PersistenceUnitTransactionType.JTA.toString());
+            //properties.put("hibernate.transaction.factory_class", JdbcTransactionFactory.class.getName());
+            //properties.put("hibernate.transaction.factory_class", JtaTransactionFactory.class.getName());
+            //properties.put(Environment.JTA_PLATFORM, "org.hibernate.service.jta.platform.internal.JBossStandAloneJtaPlatform");
+            l2Properties.put(AvailableSettings.CACHE_REGION_FACTORY, InfinispanRegionFactory.class.getName());
+
+            l2Properties.put(AvailableSettings.USE_SECOND_LEVEL_CACHE, "true");
+            l2Properties.put(AvailableSettings.USE_QUERY_CACHE, String.valueOf(queryCache));
+            l2Properties.put(AvailableSettings.USE_DIRECT_REFERENCE_CACHE_ENTRIES, String.valueOf(directReferenceEntries));
+            l2Properties.put(AvailableSettings.USE_MINIMAL_PUTS, String.valueOf(minimalPuts));
+            l2Properties.put(AvailableSettings.ENABLE_LAZY_LOAD_NO_TRANS, String.valueOf(lazyLoadNoTrans));
+            AccessType defaultAccessType = null;
+            switch (secondLevelCache) {
+                case "tx":
+                    defaultAccessType = AccessType.TRANSACTIONAL;
+                    break;
+                case "ro":
+                    defaultAccessType = AccessType.READ_ONLY;
+                    break;
+                case "rw":
+                    defaultAccessType = AccessType.READ_WRITE;
+                    break;
+                case "ns":
+                    defaultAccessType = AccessType.NONSTRICT_READ_WRITE;
+                    break;
+            }
+            if (defaultAccessType != null) {
+                l2Properties.put(AvailableSettings.DEFAULT_CACHE_CONCURRENCY_STRATEGY, defaultAccessType.getExternalName());
+            }
+            l2Properties.put("hibernate.transaction.manager_lookup_class", "org.hibernate.transaction.JBossTransactionManagerLookup");
+            return l2Properties;
         }
 
         @Setup(Level.Iteration)
@@ -404,6 +442,7 @@ public abstract class BenchmarkBase<T> {
                         beginTransaction(entityManager);
                     }
                 } else {
+                    // Hibernate 4.2 does not support JPA 2.1 with delete criteria query
 //                    String jpql = "DELETE FROM " + entityName;
 //                    if (allowedIds != null) {
 //                        jpql += " WHERE " + idProperty.getName() + " NOT IN (" + collectionToString(allowedIds) + ")";
@@ -471,7 +510,9 @@ public abstract class BenchmarkBase<T> {
                 } finally {
                     entityManager.close();
                 }
-                PerfMockDriver.getInstance().setMocking(false);
+                if (persistenceUnit.contains("mock")) {
+                    PerfMockDriver.getInstance().setMocking(false);
+                }
                 entityManagerFactory.close();
                 if (persistenceUnit.startsWith(IRON_JACAMAR)) {
                     jacamarHelper.stop();
@@ -637,7 +678,6 @@ public abstract class BenchmarkBase<T> {
             benchmarkState.beginTransaction(entityManager);
             try {
                 Collection<Long> ids = randomIds(benchmarkState, threadState.random, threadParams.getThreadIndex(), threadParams.getThreadCount());
-//                System.out.printf("Thread %d/%d updating %s\n", threadParams.getThreadIndex(), threadParams.getThreadCount(), ids);
                 for (Long id : ids) {
                     T entity = entityManager.find(benchmarkState.getClazz(), id);
                     if (entity == null) {
@@ -764,15 +804,17 @@ public abstract class BenchmarkBase<T> {
     }
 
     protected static boolean isLockException(Throwable e) {
-        /*if (e instanceof OptimisticLockException) {
-            return true;
-        } else if (e instanceof PessimisticLockException) {
-            return true;
-        } else if (e.getMessage() != null && e.getMessage().startsWith("Row not found")) {
-            return true;
-        } else if (e.getCause() != null && isLockException(e.getCause())) {
-            return true;
-        }*/
+        if (THROW_ON_LOCK_EXCEPTIONS) {
+            if (e instanceof OptimisticLockException) {
+                return true;
+            } else if (e instanceof PessimisticLockException) {
+                return true;
+            } else if (e.getMessage() != null && e.getMessage().startsWith("Row not found")) {
+                return true;
+            } else if (e.getCause() != null && isLockException(e.getCause())) {
+                return true;
+            }
+        }
         return false;
     }
 

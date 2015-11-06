@@ -75,10 +75,13 @@ public class DogBenchmark extends BenchmarkBase<Beagle> {
 
             MockResultSet criteriaRead = handler.createResultSet();
             criteriaRead.addColumn("id1_5_", seq(0, transactionSize));
+            criteriaRead.addColumn("id1_6_", seq(0, transactionSize));
             criteriaRead.addColumn("foo2_5_", list(transactionSize, "foo"));
+            criteriaRead.addColumn("foo2_6_", list(transactionSize, "foo"));
             criteriaRead.addColumn("bar1_2_", list(transactionSize, "bar"));
             criteriaRead.addColumn("goo1_0_", list(transactionSize, "goo"));
             handler.prepareResultSet("select beagle0_\\.id as id1_5_, beagle0_2_\\.foo as foo2_5_, beagle0_1_\\.bar as bar1_2_, beagle0_\\.goo as goo1_0_ from Beagle beagle0_ inner join Dog beagle0_1_ on beagle0_\\.id=beagle0_1_\\.id inner join Mammal beagle0_2_ on beagle0_\\.id=beagle0_2_\\.id where beagle0_\\.id in \\(.*\\)", criteriaRead);
+            handler.prepareResultSet("select beagle0_\\.id as id1_6_, beagle0_2_\\.foo as foo2_6_, beagle0_1_\\.bar as bar1_2_, beagle0_\\.goo as goo1_0_ from Beagle beagle0_ inner join Dog beagle0_1_ on beagle0_\\.id=beagle0_1_\\.id inner join Mammal beagle0_2_ on beagle0_\\.id=beagle0_2_\\.id where beagle0_\\.id in \\(.*\\)", criteriaRead);
         }
     }
 
