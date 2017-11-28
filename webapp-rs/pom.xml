@@ -170,6 +170,7 @@
                         <version>${gatling.version}</version>
                         <configuration>
                             <runMultipleSimulations>${gatling.runMultipleSimulations}</runMultipleSimulations>
+                            <resultsFolder>${project.build.directory}/gatling/results</resultsFolder>
                         </configuration>
                         <executions>
                             <execution>
