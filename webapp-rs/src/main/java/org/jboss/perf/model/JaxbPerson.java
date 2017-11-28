@@ -14,8 +14,8 @@ import javax.xml.bind.annotation.XmlRootElement;
 public class JaxbPerson {
    public static final JaxbPerson JOHNNY = new JaxbPerson("John", "Black", 33,
          new Address("East Road", 666, "New York"));
-   public static final String JOHNNY_JSON = "{\"firstName\":\"John\",\"lastName\":\"Black\",\"age\":33,\"address\":" +
-         "{\"street\":\"East Road\",\"number\":666,\"city\":\"New York\"}}";
+   public static final String JOHNNY_JSON = "{\"@firstName\":\"John\",\"@lastName\":\"Black\",\"@age\":33,\"address\":" +
+         "{\"@street\":\"East Road\",\"@number\":666,\"@city\":\"New York\"}}";
    public static final String JOHNNY_XML =
          "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
          "<person firstName=\"John\" lastName=\"Black\" age=\"33\">" +

@@ -24,7 +24,8 @@ deploy the web application on server using
 mvn install -Dserver
 ```
 and on the client machine run
-````
+
+```
 mvn install -Dtest.host=serveraddress -P !server-undeploy
 ```
 (Note: sorry about the explicit profile, but Maven does not allow to deactivate from multiple properties)

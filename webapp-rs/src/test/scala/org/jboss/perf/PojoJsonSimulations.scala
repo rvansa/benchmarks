@@ -1,9 +1,8 @@
 package org.jboss.perf
 
 import io.gatling.core.Predef._
-import io.gatling.core.validation.Validation
+import io.gatling.core.body.StringBody
 import io.gatling.http.Predef._
-import io.gatling.http.request.StringBody
 import io.gatling.http.request.builder.Http
 import org.jboss.perf.model.PojoPerson
 

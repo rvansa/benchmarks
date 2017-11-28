@@ -21,6 +21,10 @@ public class PrintStats {
          throw new IllegalArgumentException("Expected single argument, got: " + Arrays.toString(args));
       }
       File dir = new File(args[0]);
+      if (!dir.exists()) {
+         System.err.printf("Directory %s does not exist%n", dir);
+         return;
+      }
       if (!dir.isDirectory()) {
          throw new IllegalArgumentException(dir + " is not a directory");
       }
