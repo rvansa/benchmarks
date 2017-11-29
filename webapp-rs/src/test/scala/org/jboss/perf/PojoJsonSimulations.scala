@@ -25,13 +25,13 @@ object PojoJsonSimulations {
 
   class Post extends BaseSimulation with AppJson {
     def run(http: Http) = {
-      http.post("/pojo").body(new StringBody(PojoPerson.JOHNNY_JSON)).check(status.is(204));
+      http.post("/pojo").body(StringBody(PojoPerson.JOHNNY_JSON)).check(status.is(204))
     }
   }
 
   class Put extends BaseSimulation with AppJson {
     def run(http: Http) = {
-      http.put("/pojo").body(new StringBody(PojoPerson.JOHNNY_JSON)).check(status.is(200), bodyString.is(PojoPerson.JOHNNY_JSON));
+      http.put("/pojo").body(StringBody(PojoPerson.JOHNNY_JSON)).check(status.is(200), bodyString.is(PojoPerson.JOHNNY_JSON))
     }
   }
 }

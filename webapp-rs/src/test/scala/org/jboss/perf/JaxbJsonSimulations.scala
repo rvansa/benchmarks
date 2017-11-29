@@ -22,13 +22,13 @@ object JaxbJsonSimulations {
 
   class Post extends BaseSimulation with AppJson {
     def run(http: Http) = {
-      http.post("/jaxb").body(new StringBody(uploadJson)).check(status.is(204));
+      http.post("/jaxb").body(StringBody(uploadJson)).check(status.is(204));
     }
   }
 
   class Put extends BaseSimulation with AppJson {
     def run(http: Http) = {
-      http.put("/jaxb").body(new StringBody(uploadJson)).check(status.is(200), bodyString.is(downloadJson) );
+      http.put("/jaxb").body(StringBody(uploadJson)).check(status.is(200), bodyString.is(downloadJson) );
     }
   }
 }

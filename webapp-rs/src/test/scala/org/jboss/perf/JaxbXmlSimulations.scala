@@ -18,13 +18,13 @@ object JaxbXmlSimulations {
 
   class Post extends BaseSimulation with AppXml {
     def run(http: Http) = {
-      http.post("/jaxb").body(new StringBody(JaxbPerson.JOHNNY_XML)).check(status.is(204));
+      http.post("/jaxb").body(StringBody(JaxbPerson.JOHNNY_XML)).check(status.is(204));
     }
   }
 
   class Put extends BaseSimulation with AppXml {
     def run(http: Http) = {
-      http.put("/jaxb").body(new StringBody(JaxbPerson.JOHNNY_XML)).check(status.is(200), bodyString.is(JaxbPerson.JOHNNY_XML));
+      http.put("/jaxb").body(StringBody(JaxbPerson.JOHNNY_XML)).check(status.is(200), bodyString.is(JaxbPerson.JOHNNY_XML));
     }
   }
 }

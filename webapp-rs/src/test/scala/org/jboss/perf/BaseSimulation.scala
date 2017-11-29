@@ -21,7 +21,8 @@ abstract class BaseSimulation extends Simulation {
 
   def root() = Activator.ROOT_PATH;
 
-  def configuration() = {
+  // TODO: use this as implicit configuration
+  def config() = {
     val cfg = io.gatling.core.Predef.configuration
     cfg.copy(http = cfg.http.copy(
       ahc = cfg.http.ahc.copy(
@@ -31,7 +32,7 @@ abstract class BaseSimulation extends Simulation {
   }
 
   def protocolConf() = {
-      http.baseURL("http://" + host + ":" + port + root()).doNotTrackHeader("1").shareConnections
+      http(config).baseURL("http://" + host + ":" + port + root()).doNotTrackHeader("1").shareConnections
   }
 
   def pre(scenarioBuilder: ScenarioBuilder) = scenarioBuilder
@@ -43,7 +44,7 @@ abstract class BaseSimulation extends Simulation {
   var name = getClass().getName();
   name = name.substring(name.lastIndexOf('.') + 1).replaceAllLiterally("$", ".");
   var injectionSteps = new Array[InjectionStep](0);
-  if (rampUp > 0) injectionSteps :+ (rampUsersPerSec(1) to (usersPerSec.toInt) during (rampUp seconds))
-  if (duration > 0) injectionSteps :+ (constantUsersPerSec(usersPerSec) during (duration seconds))
+  if (rampUp > 0) injectionSteps = injectionSteps :+ (rampUsersPerSec(1) to (usersPerSec.toInt) during (rampUp seconds))
+  if (duration > 0) injectionSteps = injectionSteps :+ (constantUsersPerSec(usersPerSec) during (duration seconds))
   setUp(run(scenario(name)).inject(injectionSteps).protocols(protocolConf()))
 }
