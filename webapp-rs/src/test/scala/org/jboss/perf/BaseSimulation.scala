@@ -38,7 +38,7 @@ abstract class BaseSimulation extends Simulation {
   var injectionSteps = new Array[InjectionStep](0);
   if (rampUp > 0) injectionSteps = injectionSteps :+ (rampUsersPerSec(1) to (usersPerSec.toInt) during (rampUp seconds))
   if (duration > 0) injectionSteps = injectionSteps :+ (constantUsersPerSec(usersPerSec) during (duration seconds))
-  setUp(run(scenario(name)).inject(injectionSteps).protocols(protocolConf()))
+  setUp(run(scenario(name)).inject(injectionSteps).protocols(protocolConf())).maxDuration(rampUp + duration)
 }
 
 object BaseSimulation {
@@ -52,12 +52,14 @@ object BaseSimulation {
   val defaultCfg = io.gatling.core.Predef.configuration
   val soReuseAddress = System.getProperty("test.soReuseAddress", defaultCfg.http.ahc.soReuseAddress.toString).toBoolean
   val keepAlive = System.getProperty("test.keepAlive", defaultCfg.http.ahc.keepAlive.toString).toBoolean
+  val requestTimeout = System.getProperty("test.keepAlive", defaultCfg.http.ahc.requestTimeOut.toString).toInt
 
   val cfg = defaultCfg.copy(
     http = defaultCfg.http.copy(
       ahc = defaultCfg.http.ahc.copy(
         soReuseAddress = soReuseAddress,
-        keepAlive = keepAlive
+        keepAlive = keepAlive,
+        requestTimeOut = requestTimeout
       )
     ),
     core = defaultCfg.core.copy(
