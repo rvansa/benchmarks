@@ -93,14 +93,15 @@ public class ParseLog {
       int maxLenght = data.keySet().stream().mapToInt(String::length).max().getAsInt();
       String indent = indent(maxLenght - 4);
       System.out.println();
-      System.out.printf("Test%s Requests Errors   Mean     Std.dev. Min      Max      50th pct 75th pct 95th pct 99th pct over%n", indent);
-      System.out.printf("    %s -------- -------- -------- -------- -------- -------- -------- -------- -------- -------- ----%n", indent);
+      System.out.printf("Test%s Requests Errors   Mean     Std.dev. Min      Max      50th pct 75th pct 95th pct 99th pct over (num)%n", indent);
+      System.out.printf("    %s -------- -------- -------- -------- -------- -------- -------- -------- -------- -------- ---- -----%n", indent);
       for (RunData s : data.values()) {
-         System.out.printf("%s%s %8d %8d %8.3f %8.3f %8d %8d %8d %8d %8d %8d %4d%n", s.name, indent(maxLenght - s.name.length()),
+         int overTime = IntStream.range(0, s.users.length).filter(time -> s.liveUsersAt(time * 1000 + 500) > overload).findFirst().orElse(-1);
+         System.out.printf("%s%s %8d %8d %8.3f %8.3f %8d %8d %8d %8d %8d %8d %4d %5d%n", s.name, indent(maxLenght - s.name.length()),
             s.histogram.getTotalCount(), s.failedRequests, s.histogram.getMean(), s.histogram.getStdDeviation(),
             s.histogram.getMinValue(), s.histogram.getMaxValue(), s.histogram.getValueAtPercentile(50),
             s.histogram.getValueAtPercentile(75), s.histogram.getValueAtPercentile(95), s.histogram.getValueAtPercentile(99),
-            IntStream.range(0, s.users.length).filter(time -> s.liveUsersAt(time * 1000 + 500) > overload).findFirst().orElse(-1));
+            overTime, s.liveUsersAt(overTime * 1000 + 500));
       }
    }
 
