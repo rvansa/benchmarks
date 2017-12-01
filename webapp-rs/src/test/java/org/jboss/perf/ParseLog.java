@@ -39,52 +39,28 @@ public class ParseLog {
 
    // point where we consider the server overloaded
    private static int overload = Integer.getInteger("test.overload", BaseSimulation$.MODULE$.usersPerSec() * 3);
+   private static String simulationLog = System.getProperty("test.simulationLog");
 
    public static void main(String[] args) {
       GatlingConfiguration cfg = BaseSimulation$.MODULE$.cfg();
       String resultsDir = cfg.core().directory().results();
 
       Map<String, RunData> data = new HashMap<>();
-      for (File subdir : new File(resultsDir).listFiles()) {
-         if (!subdir.isDirectory()) {
-            System.err.printf("Skipping %s/%s which is not a directory%n", resultsDir, subdir);
-            continue;
+      if (simulationLog == null) {
+         for (File subdir : new File(resultsDir).listFiles()) {
+            if (!subdir.isDirectory()) {
+               System.err.printf("Skipping %s/%s which is not a directory%n", resultsDir, subdir);
+               continue;
+            }
+            for (File logFile : subdir.listFiles((dir, name) -> name.endsWith(".log"))) {
+               System.err.printf("Parsing %s%n", logFile.getAbsolutePath());
+               RunData runData = parseRunData(logFile);
+               data.compute(runData.name, (name, pre) -> pre == null ? runData : pre.merge(runData));
+            }
          }
-         for (File simulationLog : subdir.listFiles((dir, name) -> name.endsWith(".log"))) {
-            System.err.printf("Parsing %s%n", simulationLog.getAbsolutePath());
-            RunData runData = new RunData();
-            parseLog(simulationLog, runMessage -> {
-                  runData.name = runMessage.simulationClassName();
-                  runData.startTime = runMessage.start();
-               },
-               requestRecord -> {
-                  if (runData.startTime == Long.MAX_VALUE) {
-                     System.err.println("Missing RUN record at the beginning");
-                  } else if (requestRecord.start() - runData.startTime < TimeUnit.SECONDS.toMillis(BaseSimulation$.MODULE$.rampUp())) {
-                     //ignore
-                  } else {
-                     runData.histogram.recordValue(requestRecord.responseTime());
-                     if (requestRecord.status() == KO$.MODULE$) {
-                        runData.failedRequests++;
-                     }
-                  }
-               },
-               errorRecord -> {
-                  if (runData.startTime == Long.MAX_VALUE) {
-                     System.err.println("Missing RUN record at the beginning");
-                  } else if (errorRecord.timestamp() - runData.startTime < BaseSimulation$.MODULE$.rampUp()) {
-                     //ignore
-                  } else {
-                     runData.errors++;
-                  }
-               },
-               userRecord -> {
-                  if (userRecord.event() == End$.MODULE$) {
-                     runData.addUser(Integer.parseInt(userRecord.userId()), userRecord.start(), userRecord.end());
-                  }
-               });
-            data.compute(runData.name, (name, pre) -> pre == null ? runData : pre.merge(runData));
-         }
+      } else {
+         RunData runData = parseRunData(new File(simulationLog));
+         data.put(runData.name, runData);
       }
       if (data.isEmpty()) {
          System.err.println("No data.");
@@ -103,6 +79,41 @@ public class ParseLog {
             s.histogram.getValueAtPercentile(75), s.histogram.getValueAtPercentile(95), s.histogram.getValueAtPercentile(99),
             overTime, s.liveUsersAt(overTime * 1000 + 500));
       }
+   }
+
+   private static RunData parseRunData(File simulationLog) {
+      RunData runData = new RunData();
+      parseLog(simulationLog, runMessage -> {
+            runData.name = runMessage.simulationClassName();
+            runData.startTime = runMessage.start();
+         },
+         requestRecord -> {
+            if (runData.startTime == Long.MAX_VALUE) {
+               System.err.println("Missing RUN record at the beginning");
+            } else if (requestRecord.start() - runData.startTime < TimeUnit.SECONDS.toMillis(BaseSimulation$.MODULE$.rampUp())) {
+               //ignore
+            } else {
+               runData.histogram.recordValue(requestRecord.responseTime());
+               if (requestRecord.status() == KO$.MODULE$) {
+                  runData.failedRequests++;
+               }
+            }
+         },
+         errorRecord -> {
+            if (runData.startTime == Long.MAX_VALUE) {
+               System.err.println("Missing RUN record at the beginning");
+            } else if (errorRecord.timestamp() - runData.startTime < BaseSimulation$.MODULE$.rampUp()) {
+               //ignore
+            } else {
+               runData.errors++;
+            }
+         },
+         userRecord -> {
+            if (userRecord.event() == End$.MODULE$) {
+               runData.addUser(Integer.parseInt(userRecord.userId()), userRecord.start(), userRecord.end());
+            }
+         });
+      return runData;
    }
 
    private static String indent(int maxLenght) {
