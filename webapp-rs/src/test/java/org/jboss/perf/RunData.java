@@ -31,11 +31,11 @@ public class RunData {
          userStart = Arrays.copyOf(userStart, Math.max(userStart.length * 2, userId));
          userEnd = Arrays.copyOf(userEnd, Math.max(userEnd.length * 2, userId));
       }
-      userStart[userId - 1] = start;
-      userEnd[userId - 1] = end;
+      userStart[userId - 1] = start - startTime;
+      userEnd[userId - 1] = end - startTime;
 
       endTime = Math.max(endTime, end);
-      int relativeStart = (int) TimeUnit.MILLISECONDS.toSeconds(end - startTime);
+      int relativeStart = (int) TimeUnit.MILLISECONDS.toSeconds(start - startTime);
       int relativeEnd = (int) TimeUnit.MILLISECONDS.toSeconds(end - startTime);
       if (relativeEnd >= users.length) {
          users = Arrays.copyOf(users, Math.max(users.length * 2, relativeEnd + 1));
@@ -43,5 +43,15 @@ public class RunData {
       for (int time = relativeStart; time <= relativeEnd; ++time) {
          users[time]++;
       }
+   }
+
+   public int liveUsersAt(int relativeTimeMs) {
+      int count = 0;
+      for (int i = 0; i < userStart.length; ++i) {
+         if (userStart[i] <= relativeTimeMs && userEnd[i] > relativeTimeMs) {
+            ++count;
+         }
+      }
+      return count;
    }
 }

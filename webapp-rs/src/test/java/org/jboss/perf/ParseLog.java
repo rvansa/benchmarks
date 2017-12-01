@@ -37,6 +37,9 @@ public class ParseLog {
    private static final RequestRecordParser REQUEST_RECORD_PARSER = new RequestRecordParser(BaseSimulation$.MODULE$.longToInt());;
    private static final ErrorRecordParser$ ERROR_RECORD_PARSER = ErrorRecordParser$.MODULE$;
 
+   // point where we consider the server overloaded
+   private static int overload = Integer.getInteger("test.overload", BaseSimulation$.MODULE$.usersPerSec() * 3);
+
    public static void main(String[] args) {
       GatlingConfiguration cfg = BaseSimulation$.MODULE$.cfg();
       String resultsDir = cfg.core().directory().results();
@@ -45,8 +48,10 @@ public class ParseLog {
       for (File subdir : new File(resultsDir).listFiles()) {
          if (!subdir.isDirectory()) {
             System.err.printf("Skipping %s/%s which is not a directory%n", resultsDir, subdir);
+            continue;
          }
          for (File simulationLog : subdir.listFiles((dir, name) -> name.endsWith(".log"))) {
+            System.err.printf("Parsing %s%n", simulationLog.getAbsolutePath());
             RunData runData = new RunData();
             parseLog(simulationLog, runMessage -> {
                   runData.name = runMessage.simulationClassName();
@@ -81,16 +86,21 @@ public class ParseLog {
             data.compute(runData.name, (name, pre) -> pre == null ? runData : pre.merge(runData));
          }
       }
+      if (data.isEmpty()) {
+         System.err.println("No data.");
+         return;
+      }
       int maxLenght = data.keySet().stream().mapToInt(String::length).max().getAsInt();
       String indent = indent(maxLenght - 4);
       System.out.println();
-      System.out.printf("Test%s Requests Errors   Mean     Std.dev. Min      Max      50th pct 75th pct 95th pct 99th pct%n", indent);
-      System.out.printf("    %s -------- -------- -------- -------- -------- -------- -------- -------- -------- --------%n", indent);
+      System.out.printf("Test%s Requests Errors   Mean     Std.dev. Min      Max      50th pct 75th pct 95th pct 99th pct over%n", indent);
+      System.out.printf("    %s -------- -------- -------- -------- -------- -------- -------- -------- -------- -------- ----%n", indent);
       for (RunData s : data.values()) {
-         System.out.printf("%s%s %8d %8d %8.3f %8.3f %8d %8d %8d %8d %8d %8d%n", s.name, indent(maxLenght - s.name.length()),
+         System.out.printf("%s%s %8d %8d %8.3f %8.3f %8d %8d %8d %8d %8d %8d %4d%n", s.name, indent(maxLenght - s.name.length()),
             s.histogram.getTotalCount(), s.failedRequests, s.histogram.getMean(), s.histogram.getStdDeviation(),
             s.histogram.getMinValue(), s.histogram.getMaxValue(), s.histogram.getValueAtPercentile(50),
-            s.histogram.getValueAtPercentile(75), s.histogram.getValueAtPercentile(95), s.histogram.getValueAtPercentile(99));
+            s.histogram.getValueAtPercentile(75), s.histogram.getValueAtPercentile(95), s.histogram.getValueAtPercentile(99),
+            IntStream.range(0, s.users.length).filter(time -> s.liveUsersAt(time * 1000 + 500) > overload).findFirst().orElse(-1));
       }
    }
 
