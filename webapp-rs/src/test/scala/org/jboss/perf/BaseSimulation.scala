@@ -36,12 +36,13 @@ abstract class BaseSimulation extends Simulation {
   var name = getClass().getName();
   name = name.substring(name.lastIndexOf('.') + 1).replaceAllLiterally("$", ".");
   var injectionSteps = new Array[InjectionStep](0);
-  if (rampUp > 0) injectionSteps = injectionSteps :+ (rampUsersPerSec(1) to (usersPerSec.toInt) during (rampUp seconds))
+  if (rampUp > 0) injectionSteps = injectionSteps :+ (rampUsersPerSec(rampUsersFrom) to (usersPerSec.toInt) during (rampUp seconds))
   if (duration > 0) injectionSteps = injectionSteps :+ (constantUsersPerSec(usersPerSec) during (duration seconds))
   setUp(run(scenario(name)).inject(injectionSteps).protocols(protocolConf())).maxDuration(rampUp + duration)
 }
 
 object BaseSimulation {
+  val rampUsersFrom = Integer.getInteger("test.rampUsersFrom", 1).intValue()
   val rampUp = Integer.getInteger("test.rampUp", 2).intValue()
   val duration = Integer.getInteger("test.duration", 2)
   val host = System.getProperty("test.host", "localhost")
@@ -52,7 +53,7 @@ object BaseSimulation {
   val defaultCfg = io.gatling.core.Predef.configuration
   val soReuseAddress = System.getProperty("test.soReuseAddress", defaultCfg.http.ahc.soReuseAddress.toString).toBoolean
   val keepAlive = System.getProperty("test.keepAlive", defaultCfg.http.ahc.keepAlive.toString).toBoolean
-  val requestTimeout = System.getProperty("test.keepAlive", defaultCfg.http.ahc.requestTimeOut.toString).toInt
+  val requestTimeout = System.getProperty("test.requestTimeout", defaultCfg.http.ahc.requestTimeOut.toString).toInt
 
   val cfg = defaultCfg.copy(
     http = defaultCfg.http.copy(
