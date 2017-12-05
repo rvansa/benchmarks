@@ -1,11 +1,13 @@
 package org.jboss.perf
 
+import java.io.FileInputStream
+import java.util.Properties
+
 import io.gatling.core.Predef._
 import io.gatling.core.structure.ScenarioBuilder
 import io.gatling.core.controller.inject.InjectionStep
 import io.gatling.http.Predef._
 import io.gatling.http.request.builder.{Http, HttpRequestBuilder}
-
 import org.jboss.perf.BaseSimulation._
 
 import scala.concurrent.duration._;
@@ -36,6 +38,19 @@ abstract class BaseSimulation extends Simulation {
   var name = getClass().getName();
   name = name.substring(name.lastIndexOf('.') + 1).replaceAllLiterally("$", ".");
   var injectionSteps = new Array[InjectionStep](0);
+  val usersPerSec = if (usersPerSecFile == null) {
+    BaseSimulation.usersPerSec
+  } else {
+    var file = new FileInputStream(usersPerSecFile)
+    try {
+      val properties = new Properties()
+      properties.load(file)
+      properties.getProperty(getClass.getName).toInt
+    } finally {
+      file.close()
+    }
+  }
+  System.out.println("Running with " + usersPerSec)
   if (rampUp > 0) injectionSteps = injectionSteps :+ (rampUsersPerSec(rampUsersFrom) to (usersPerSec.toInt) during (rampUp seconds))
   if (duration > 0) injectionSteps = injectionSteps :+ (constantUsersPerSec(usersPerSec) during (duration seconds))
   setUp(run(scenario(name)).inject(injectionSteps).protocols(protocolConf())).maxDuration(rampUp + duration)
@@ -49,6 +64,17 @@ object BaseSimulation {
   val port = Integer.getInteger("test.port", 8080)
   val usersPerSec = Integer.getInteger("test.usersPerSec", 100).intValue()
   val reqsPerUser = Integer.getInteger("test.reqsPerUser", 10).intValue()
+  val usersPerSecFile: String = {
+    val value = System.getProperty("test.usersPerSec")
+    if (value != null) {
+      try {
+        Integer.decode(value)
+        null
+      } catch {
+        case e: NumberFormatException => value;
+      }
+    } else null
+  }
 
   val defaultCfg = io.gatling.core.Predef.configuration
   val soReuseAddress = System.getProperty("test.soReuseAddress", defaultCfg.http.ahc.soReuseAddress.toString).toBoolean
