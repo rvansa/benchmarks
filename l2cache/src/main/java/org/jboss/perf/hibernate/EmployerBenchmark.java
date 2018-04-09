@@ -1,7 +1,6 @@
 package org.jboss.perf.hibernate;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -16,7 +15,6 @@ import javax.persistence.metamodel.SingularAttribute;
 
 import com.mockrunner.jdbc.PreparedStatementResultSetHandler;
 import com.mockrunner.mock.jdbc.EvaluableResultSet;
-import com.mockrunner.mock.jdbc.MockParameterMap;
 import com.mockrunner.mock.jdbc.MockResultSet;
 import org.jboss.perf.hibernate.model.Employee;
 import org.jboss.perf.hibernate.model.Employer;
@@ -66,7 +64,7 @@ public class EmployerBenchmark extends BenchmarkBase<Employer> {
             handler.prepareResultSet("select employer0_\\.id as id1_4_0_, employer0_\\.name as name2_4_0_ from Employer employer0_ where employer0_\\.id=\\?", single);
 
             EvaluableResultSet withEmployees = evaluableResultSetFactory.create("withEmployees");
-            List<Object> idList = list(10, (EvaluableResultSet.Evaluable) (sql, parameters, columnName, row) -> parameters.get(1));
+            List<Object> idList = list(10, BenchmarkBase::getFirstParam);
             List<Object> idSeq = seq(0, 10);
             withEmployees.addColumn("id1_4_0_", idList);
             withEmployees.addColumn("name2_4_0_", list(10, "employer"));
@@ -92,15 +90,7 @@ public class EmployerBenchmark extends BenchmarkBase<Employer> {
                   + "employees0_\\.employer_id as employer3_3_1_, employees0_\\.name as name2_3_1_ from Employee employees0_ where employees0_\\.employer_id=\\?", employee);
 
             EvaluableResultSet employers = evaluableResultSetFactory.create("employers");
-            employers.addColumn("id1_4_", list(10, (EvaluableResultSet.Evaluable) (sql, parameters, columnName, row) -> {
-                int openParIndex = sql.indexOf('(');
-                int closeParIndex = sql.lastIndexOf(')');
-                if (openParIndex < 0 || closeParIndex < openParIndex) {
-                    throw new IllegalStateException("Unexpected sql: " + sql);
-                }
-                String[] ids = sql.substring(openParIndex + 1, closeParIndex).split(",");
-                return ids[row].trim(); // row index is 1-based
-            }));
+            employers.addColumn("id1_4_", list(10, BenchmarkBase::addIdFromRange));
             employers.addColumn("name2_4_", list(10, "employer"));
             handler.prepareResultSet("select employer0_\\.id as id1_4_, employer0_\\.name as name2_4_ from Employer employer0_ where employer0_\\.id in \\(.*\\)", employers);
 
@@ -145,7 +135,12 @@ public class EmployerBenchmark extends BenchmarkBase<Employer> {
             // sack and hire up to 3 employees
             for (int i = 0; i < 3; ++i) {
                 int index = random.nextInt(employees.size());
-                employees.set(index, new Employee(Randomizer.randomString(5, 20), employer));
+                // do not replace new hire, NPE thrown: HHH-12464
+                if (employees.get(index).getId() == 0) {
+                    --i;
+                } else {
+                    employees.set(index, new Employee(Randomizer.randomString(5, 20), employer));
+                }
             }
         }
     }
@@ -183,15 +178,12 @@ public class EmployerBenchmark extends BenchmarkBase<Employer> {
     @Benchmark
     public void testQueryEmployerFor(final EmployerBenchmarkState benchmarkState, ThreadState threadState, Blackhole blackhole) throws Exception {
         final String prefix = Randomizer.randomStringBuilder(2, 2, threadState.random).append('%').toString();
-        super.testQuery(benchmarkState, blackhole, new QueryRunner() {
-            @Override
-            public Collection<?> runQuery(EntityManager entityManager, CriteriaBuilder cb) {
-                CriteriaQuery<Employer> query = cb.createQuery(Employer.class);
-                Root<Employer> root = query.from(Employer.class);
-                Path<String> path = root.join(benchmarkState.employees).get(benchmarkState.employeeName);
-                query.select(root).where(cb.like(path, prefix));
-                return entityManager.createQuery(query).getResultList();
-            }
+        super.testQuery(benchmarkState, blackhole, (entityManager, cb) -> {
+            CriteriaQuery<Employer> query = cb.createQuery(Employer.class);
+            Root<Employer> root = query.from(Employer.class);
+            Path<String> path = root.join(benchmarkState.employees).get(benchmarkState.employeeName);
+            query.select(root).where(cb.like(path, prefix));
+            return entityManager.createQuery(query).getResultList();
         });
     }
 }

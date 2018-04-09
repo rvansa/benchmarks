@@ -1,9 +1,7 @@
 package org.jboss.perf.hibernate;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.ThreadLocalRandom;
-import javax.persistence.EntityManager;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.Path;
@@ -13,6 +11,7 @@ import javax.persistence.criteria.Subquery;
 import javax.persistence.metamodel.SingularAttribute;
 
 import com.mockrunner.jdbc.PreparedStatementResultSetHandler;
+import com.mockrunner.mock.jdbc.EvaluableResultSet;
 import com.mockrunner.mock.jdbc.MockResultSet;
 import org.jboss.perf.hibernate.model.Node;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -53,6 +52,7 @@ public class NodeBenchmark extends BenchmarkBase<Node> {
         @Override
         public void setupMock() {
             super.setupMock();
+            EvaluableResultSet.Factory factory = new EvaluableResultSet.Factory(true);
             PreparedStatementResultSetHandler handler = PerfMockDriver.getInstance().getPreparedStatementHandler();
 
             MockResultSet all = handler.createResultSet();
@@ -69,6 +69,33 @@ public class NodeBenchmark extends BenchmarkBase<Node> {
             single.addColumn("rightSiz3_6_0_", Collections.singletonList(50));
             single.addColumn("root4_6_0_", Collections.singletonList(true));
             handler.prepareResultSet("select node0_.id as id1_6_0_, node0_.left_id as left_id5_6_0_, node0_.leftSize as leftSize2_6_0_, node0_.right_id as right_id6_6_0_, node0_.rightSize as rightSiz3_6_0_, node0_.root as root4_6_0_ from Node node0_ where node0_.id=\\?", single);
+
+            EvaluableResultSet singleAlt = factory.create("single");
+            singleAlt.addColumn("id1_7_0_", Collections.singletonList((EvaluableResultSet.Evaluable) BenchmarkBase::getFirstParam));
+            singleAlt.addColumn("left_id5_7_0_", Collections.singletonList(2L));
+            singleAlt.addColumn("leftSize2_7_0_", Collections.singletonList(49));
+            singleAlt.addColumn("right_id6_7_0_", Collections.singletonList(3L));
+            singleAlt.addColumn("rightSiz3_7_0_", Collections.singletonList(50));
+            singleAlt.addColumn("root4_7_0_", Collections.singletonList(true));
+            handler.prepareResultSet("select node0_.id as id1_7_0_, node0_.left_id as left_id5_7_0_, node0_.leftSize as leftSize2_7_0_, node0_.right_id as right_id6_7_0_, node0_.rightSize as rightSiz3_7_0_, node0_.root as root4_7_0_ from Node node0_ where node0_.id=\\?", singleAlt);
+
+            EvaluableResultSet nodes = factory.create("nodes");
+            nodes.addColumn("id1_7_", list(10, BenchmarkBase::addIdFromRange));
+            nodes.addColumn("left_id5_7_", list(10, 1L));
+            nodes.addColumn("leftSize2_7_", list(10, 0));
+            nodes.addColumn("right_id6_7_", list(10, 2L));
+            nodes.addColumn("rightSiz3_7_", list(10, 0));
+            nodes.addColumn("root4_7_", list(10, true));
+            handler.prepareResultSet("select node0_.id as id1_7_, node0_.left_id as left_id5_7_, node0_.leftSize as leftSize2_7_, node0_.right_id as right_id6_7_, node0_.rightSize as rightSiz3_7_, node0_.root as root4_7_ from Node node0_ where node0_.id in \\(.*\\)", nodes);
+
+            MockResultSet roots = handler.createResultSet();
+            roots.addColumn("id1_7_", seq(1, 10));
+            roots.addColumn("left_id5_7_", seq(11, 20));
+            roots.addColumn("leftSize2_7_", list(10, 1));
+            roots.addColumn("right_id6_7_", seq(21, 30));
+            roots.addColumn("rightSiz3_7_", list(10, 2));
+            roots.addColumn("root4_7_", list(10, true));
+            handler.prepareResultSet("select node0_.id as id1_7_, node0_.left_id as left_id5_7_, node0_.leftSize as leftSize2_7_, node0_.right_id as right_id6_7_, node0_.rightSize as rightSiz3_7_, node0_.root as root4_7_ from Node node0_ where \\(node0_.id not in  \\(select node1_.left_id from Node node1_ cross join Node node2_ where node1_.left_id=node2_.id and \\(node1_.left_id is not null\\)\\)\\) and \\(node0_.id not in  \\(select node3_.right_id from Node node3_ cross join Node node4_ where node3_.right_id=node4_.id and \\(node3_.right_id is not null\\)\\)\\) and node0_.leftSize=.*", roots);
         }
 
         @Override
@@ -115,13 +142,8 @@ public class NodeBenchmark extends BenchmarkBase<Node> {
 
         @Override
         public void modify(Node node, ThreadLocalRandom random) {
-            if (node.getLeftSize() <= maxModifiedSize) {
-                node.setLeft(randomEntity(random, false, node.getLeftSize()));
-            } else if (node.getRightSize() <= maxModifiedSize) {
-                node.setRight(randomEntity(random, false, node.getRightSize()));
-            } else {
-                modify(node.getLeftSize() < node.getRightSize() ? node.getLeft() : node.getRight(), random);
-            }
+            node.setLeft(randomEntity(random, false, node.getLeftSize()));
+            node.setRight(randomEntity(random, false, node.getRightSize()));
         }
     }
 
@@ -158,27 +180,24 @@ public class NodeBenchmark extends BenchmarkBase<Node> {
     @Benchmark
     public void testQueryRoot(final NodeBenchmarkState benchmarkState, ThreadState threadState, Blackhole blackhole) throws Exception {
         final int randomLeftSize = threadState.random.nextInt(benchmarkState.treeSize - 1);
-        super.testQuery(benchmarkState, blackhole, new QueryRunner() {
-            @Override
-            public Collection<?> runQuery(EntityManager entityManager, CriteriaBuilder cb) {
-                CriteriaQuery<Node> query = cb.createQuery(Node.class);
-                Root<Node> root = query.from(Node.class);
+        super.testQuery(benchmarkState, blackhole, (entityManager, cb) -> {
+            CriteriaQuery<Node> query = cb.createQuery(Node.class);
+            Root<Node> root = query.from(Node.class);
 
-                Subquery<Node> subqueryLeft = query.subquery(Node.class);
-                Path<Node> leftPath = subqueryLeft.from(Node.class).get(benchmarkState.left);
-                subqueryLeft.select(leftPath).where(leftPath.isNotNull());
+            Subquery<Node> subqueryLeft = query.subquery(Node.class);
+            Path<Node> leftPath = subqueryLeft.from(Node.class).get(benchmarkState.left);
+            subqueryLeft.select(leftPath).where(leftPath.isNotNull());
 
-                Subquery<Node> subqueryRight = query.subquery(Node.class);
-                Path<Node> rightPath = subqueryRight.from(Node.class).get(benchmarkState.right);
-                subqueryRight.select(rightPath).where(rightPath.isNotNull());
+            Subquery<Node> subqueryRight = query.subquery(Node.class);
+            Path<Node> rightPath = subqueryRight.from(Node.class).get(benchmarkState.right);
+            subqueryRight.select(rightPath).where(rightPath.isNotNull());
 
-                Predicate condition = cb.and(
-                      cb.not(root.in(subqueryLeft.getSelection())),
-                      cb.not(root.in(subqueryRight.getSelection())),
-                      cb.equal(root.get(benchmarkState.leftSize), randomLeftSize));
-                query.select(root).where(condition);
-                return entityManager.createQuery(query).getResultList();
-            }
+            Predicate condition = cb.and(
+                  cb.not(root.in(subqueryLeft.getSelection())),
+                  cb.not(root.in(subqueryRight.getSelection())),
+                  cb.equal(root.get(benchmarkState.leftSize), randomLeftSize));
+            query.select(root).where(condition);
+            return entityManager.createQuery(query).getResultList();
         });
     }
 }

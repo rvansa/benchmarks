@@ -143,50 +143,41 @@ public class PersonBenchmark extends BenchmarkBase<Person> {
     @Benchmark
     public void testQuery1Field(final PersonBenchmarkState benchmarkState, final ThreadState threadState, Blackhole blackhole) throws Exception {
         final String pattern = Randomizer.randomStringBuilder(2, 2, threadState.random).append("%").toString();
-        super.testQuery(benchmarkState, blackhole, new QueryRunner() {
-            @Override
-            public Collection<?> runQuery(EntityManager entityManager, CriteriaBuilder cb) {
-                CriteriaQuery<Person> query = cb.createQuery(Person.class);
-                Predicate predicate = cb.like(query.from(Person.class).get(benchmarkState.firstName), pattern);
-                query.where(predicate);
-                List<Person> resultList = entityManager.createQuery(query).getResultList();
-                return resultList;
-            }
+        super.testQuery(benchmarkState, blackhole, (entityManager, cb) -> {
+            CriteriaQuery<Person> query = cb.createQuery(Person.class);
+            Predicate predicate = cb.like(query.from(Person.class).get(benchmarkState.firstName), pattern);
+            query.where(predicate);
+            List<Person> resultList = entityManager.createQuery(query).getResultList();
+            return resultList;
         });
     }
 
     @Benchmark
     public void testQuery2Fields(final PersonBenchmarkState benchmarkState, final ThreadState threadState, Blackhole blackhole) throws Exception {
         final String pattern = Randomizer.randomStringBuilder(2, 2, threadState.random).append("%").toString();
-        super.testQuery(benchmarkState, blackhole, new QueryRunner() {
-            @Override
-            public Collection<?> runQuery(EntityManager entityManager, CriteriaBuilder cb) {
-                CriteriaQuery<Person> query = cb.createQuery(Person.class);
-                Root<Person> root = query.from(Person.class);
-                Predicate predicate = cb.like(root.get(benchmarkState.firstName), pattern);
-                predicate = cb.and(predicate, cb.like(root.get(benchmarkState.middleName), pattern));
-                query.where(predicate);
-                List<Person> resultList = entityManager.createQuery(query).getResultList();
-                return resultList;
-            }
+        super.testQuery(benchmarkState, blackhole, (entityManager, cb) -> {
+            CriteriaQuery<Person> query = cb.createQuery(Person.class);
+            Root<Person> root = query.from(Person.class);
+            Predicate predicate = cb.like(root.get(benchmarkState.firstName), pattern);
+            predicate = cb.and(predicate, cb.like(root.get(benchmarkState.middleName), pattern));
+            query.where(predicate);
+            List<Person> resultList = entityManager.createQuery(query).getResultList();
+            return resultList;
         });
     }
 
     @Benchmark
     public void testQuery3Fields(final PersonBenchmarkState benchmarkState, final ThreadState threadState, Blackhole blackhole) throws Exception {
         final String pattern = Randomizer.randomStringBuilder(2, 2, threadState.random).append("%").toString();
-        super.testQuery(benchmarkState, blackhole, new QueryRunner() {
-            @Override
-            public Collection<?> runQuery(EntityManager entityManager, CriteriaBuilder cb) {
-                CriteriaQuery<Person> query = cb.createQuery(Person.class);
-                Root<Person> root = query.from(Person.class);
-                Predicate predicate = cb.like(root.get(benchmarkState.firstName), pattern);
-                predicate = cb.and(predicate, cb.like(root.get(benchmarkState.middleName), pattern));
-                predicate = cb.and(predicate, cb.like(root.get(benchmarkState.lastName), pattern));
-                query.where(predicate);
-                List<Person> resultList = entityManager.createQuery(query).getResultList();
-                return resultList;
-            }
+        super.testQuery(benchmarkState, blackhole, (entityManager, cb) -> {
+            CriteriaQuery<Person> query = cb.createQuery(Person.class);
+            Root<Person> root = query.from(Person.class);
+            Predicate predicate = cb.like(root.get(benchmarkState.firstName), pattern);
+            predicate = cb.and(predicate, cb.like(root.get(benchmarkState.middleName), pattern));
+            predicate = cb.and(predicate, cb.like(root.get(benchmarkState.lastName), pattern));
+            query.where(predicate);
+            List<Person> resultList = entityManager.createQuery(query).getResultList();
+            return resultList;
         });
     }
 

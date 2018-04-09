@@ -14,20 +14,23 @@
     </prerequisites>
 
     <properties>
-       <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-       <javac.target>1.8</javac.target>
-       <version.jmh>1.11.2</version.jmh>
-       <uberjar.name>benchmarks</uberjar.name>
-       <!--<version.hibernate>5.0.1.Final</version.hibernate>-->
-       <version.hibernate.validator>4.1.0.Final</version.hibernate.validator>
-       <version.jbossts>4.16.3.Final</version.jbossts>
-       <version.jbossts.jts>4.17.3.Final</version.jbossts.jts>
-       <version.jbossstdio>1.0.2.GA</version.jbossstdio>
-       <version.org.jboss.naming>5.0.3.GA</version.org.jboss.naming>
-       <version.xapool>1.5.0</version.xapool>
-       <version.ironjacamar>1.0.31.Final</version.ironjacamar>
-       <version.shrinkwrap>1.1.2</version.shrinkwrap>
-       <version.shrinkwrap.descriptors>1.1.0-beta-1</version.shrinkwrap.descriptors>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <javac.target>1.8</javac.target>
+        <version.jmh>1.20</version.jmh>
+        <uberjar.name>benchmarks</uberjar.name>
+        <!-- this is the default version overriden in profiles -->
+        <!--<version.hibernate>5.3.0-SNAPSHOT</version.hibernate>-->
+        <version.hibernate>5.2.16.Final</version.hibernate>
+        <version.infinispan>9.2.2-SNAPSHOT</version.infinispan>
+        <version.hibernate.validator>4.1.0.Final</version.hibernate.validator>
+        <version.jbossts>4.16.3.Final</version.jbossts>
+        <version.jbossts.jts>4.17.3.Final</version.jbossts.jts>
+        <version.jbossstdio>1.0.2.GA</version.jbossstdio>
+        <version.org.jboss.naming>5.0.3.GA</version.org.jboss.naming>
+        <version.xapool>1.5.0</version.xapool>
+        <version.ironjacamar>1.0.31.Final</version.ironjacamar>
+        <version.shrinkwrap>1.1.2</version.shrinkwrap>
+        <version.shrinkwrap.descriptors>1.1.0-beta-1</version.shrinkwrap.descriptors>
     </properties>
 
     <dependencies>
@@ -42,52 +45,32 @@
             <version>${version.jmh}</version>
             <scope>provided</scope>
         </dependency>
-       <dependency>
-          <groupId>org.hibernate</groupId>
-          <artifactId>hibernate-core</artifactId>
-          <version>${version.hibernate}</version>
-       </dependency>
-       <dependency>
-          <groupId>org.hibernate</groupId>
-          <artifactId>hibernate-entitymanager</artifactId>
-          <version>${version.hibernate}</version>
-       </dependency>
-       <dependency>
-          <groupId>org.hibernate</groupId>
-          <artifactId>hibernate-infinispan</artifactId>
-          <version>${version.hibernate}</version>
-          <exclusions>
-             <exclusion>
-                <groupId>org.jboss.spec.javax.transaction</groupId>
-                <artifactId>jboss-transaction-api_1.1_spec</artifactId>
-             </exclusion>
-             <exclusion>
-                <groupId>org.infinispan</groupId>
-                <artifactId>infinispan-core</artifactId>
-             </exclusion>
-          </exclusions>
-       </dependency>
-       <dependency>
-          <groupId>org.infinispan</groupId>
-          <artifactId>infinispan-core</artifactId>
-          <version>${version.infinispan}</version>
-       </dependency>
-       <dependency>
-          <groupId>org.hibernate</groupId>
-          <artifactId>hibernate-c3p0</artifactId>
-          <version>${version.hibernate}</version>
-       </dependency>
-       <dependency>
-          <groupId>org.hibernate</groupId>
-          <artifactId>hibernate-hikaricp</artifactId>
-          <version>${version.hibernate}</version>
-          <exclusions>
-             <exclusion>
-                <groupId>com.zaxxer</groupId>
-                <artifactId>HikariCP</artifactId>
-             </exclusion>
-          </exclusions>
-       </dependency>
+        <dependency>
+            <groupId>org.hibernate</groupId>
+            <artifactId>hibernate-entitymanager</artifactId>
+            <version>${version.hibernate}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.hibernate</groupId>
+            <artifactId>hibernate-c3p0</artifactId>
+            <version>${version.hibernate}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.hibernate</groupId>
+            <artifactId>hibernate-hikaricp</artifactId>
+            <version>${version.hibernate}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.zaxxer</groupId>
+                    <artifactId>HikariCP</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.infinispan</groupId>
+            <artifactId>infinispan-hibernate-cache-spi</artifactId>
+            <version>${version.infinispan}</version>
+        </dependency>
        <dependency>
           <groupId>com.zaxxer</groupId>
           <artifactId>HikariCP-java6</artifactId>
@@ -297,42 +280,6 @@
          </dependencies>
       </profile>
        <profile>
-           <id>hibernate-43</id>
-           <activation>
-               <property>
-                   <name>hibernate.43</name>
-               </property>
-           </activation>
-           <properties>
-               <version.hibernate>4.3.8.Final</version.hibernate>
-               <version.infinispan>7.2.5.Final</version.infinispan>
-           </properties>
-       </profile>
-       <profile>
-           <id>hibernate-42</id>
-           <activation>
-               <property>
-                   <name>hibernate.42</name>
-               </property>
-           </activation>
-           <properties>
-               <version.hibernate>4.2.20.Final</version.hibernate>
-               <version.infinispan>7.2.5.Final</version.infinispan>
-           </properties>
-       </profile>
-      <profile>
-         <id>hibernate-50</id>
-         <activation>
-            <property>
-               <name>hibernate.50</name>
-            </property>
-         </activation>
-         <properties>
-            <version.hibernate>5.0.4-SNAPSHOT</version.hibernate>
-            <version.infinispan>8.0.1.Final</version.infinispan>
-         </properties>
-      </profile>
-       <profile>
            <id>hibernate-51</id>
            <activation>
                <property>
@@ -340,9 +287,51 @@
                </property>
            </activation>
            <properties>
-               <version.hibernate>5.1.0-SNAPSHOT</version.hibernate>
-               <version.infinispan>8.0.1.Final</version.infinispan>
+               <version.hibernate>5.1.12.Final</version.hibernate>
            </properties>
+           <dependencies>
+               <dependency>
+                   <groupId>org.infinispan</groupId>
+                   <artifactId>infinispan-hibernate-cache-v51</artifactId>
+                   <version>${version.infinispan}</version>
+               </dependency>
+           </dependencies>
+       </profile>
+       <profile>
+           <id>hibernate-52</id>
+           <activation>
+               <property>
+                   <name>hibernate.52</name>
+               </property>
+           </activation>
+           <properties>
+               <version.hibernate>5.2.16.Final</version.hibernate>
+           </properties>
+           <dependencies>
+               <dependency>
+                   <groupId>org.infinispan</groupId>
+                   <artifactId>infinispan-hibernate-cache</artifactId>
+                   <version>${version.infinispan}</version>
+               </dependency>
+           </dependencies>
+       </profile>
+       <profile>
+           <id>hibernate-53</id>
+           <activation>
+               <property>
+                   <name>hibernate.53</name>
+               </property>
+           </activation>
+           <properties>
+               <version.hibernate>5.3.0-SNAPSHOT</version.hibernate>
+           </properties>
+           <dependencies>
+               <dependency>
+                   <groupId>org.infinispan</groupId>
+                   <artifactId>infinispan-hibernate-cache-v53</artifactId>
+                   <version>${version.infinispan}</version>
+               </dependency>
+           </dependencies>
        </profile>
       <profile>
          <id>enhanced</id>
@@ -400,6 +389,7 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>org.openjdk.jmh.Main</mainClass>
                                 </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
                             <filters>
                                 <filter>

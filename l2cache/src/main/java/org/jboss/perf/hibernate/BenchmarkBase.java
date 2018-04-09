@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 import javax.persistence.EntityManager;
@@ -23,7 +24,6 @@ import javax.persistence.SharedCacheMode;
 import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaDelete;
 import javax.persistence.criteria.CriteriaQuery;
-import javax.persistence.criteria.Path;
 import javax.persistence.criteria.Predicate;
 import javax.persistence.criteria.Root;
 import javax.persistence.metamodel.EntityType;
@@ -34,10 +34,10 @@ import javax.transaction.TransactionManager;
 
 import com.mockrunner.jdbc.ResultSetFactory;
 import com.mockrunner.jdbc.PreparedStatementResultSetHandler;
+import com.mockrunner.mock.jdbc.EvaluableResultSet;
+import com.mockrunner.mock.jdbc.MockParameterMap;
 import com.mockrunner.mock.jdbc.MockResultSet;
 import com.mockrunner.util.regexp.StartsEndsPatternMatcher;
-import org.hibernate.Version;
-import org.hibernate.cache.infinispan.InfinispanRegionFactory;
 import org.hibernate.cache.spi.access.AccessType;
 import org.hibernate.cfg.AvailableSettings;
 import org.openjdk.jmh.annotations.Level;
@@ -52,41 +52,42 @@ import org.perfmock.FunctionalMockResultSet;
 import org.perfmock.PerfMockDriver;
 
 public abstract class BenchmarkBase<T> {
-    private static final Map<String, String> NON_CACHED_PROPERTIES = new HashMap<String, String>();
+    private static final Map<String, String> NON_CACHED_PROPERTIES = new HashMap<>();
     private static final boolean PRINT_STACK_TRACES = Boolean.valueOf(System.getProperty("printStackTraces", "true"));
     private static final boolean THROW_ON_LOCK_EXCEPTIONS = Boolean.valueOf(System.getProperty("throwOnLockExceptions", "true"));
-    private static final int HIBERNATE_VERSION;
 
     static {
-        String[] hv = Version.getVersionString().replaceAll("[^0-9.]", "").split("\\.");
-        HIBERNATE_VERSION = Integer.parseInt(hv[0]) * 10000 + Integer.parseInt(hv[1]) * 100 + Integer.parseInt(hv[2]);
         NON_CACHED_PROPERTIES.put(AvailableSettings.USE_SECOND_LEVEL_CACHE, "false");
+        //noinspection ResultOfMethodCallIgnored
         PerfMockDriver.getInstance(); // make sure PerfMockDriver is classloaded
     }
 
-    protected static final String C3P0 = "c3p0";
-    protected static final String HIKARI = "hikari";
-    protected static final String IRON_JACAMAR = "ironjacamar";
+    static final String IRON_JACAMAR = "ironjacamar";
 
-    //protected static Log log = LogFactory.getLog("Benchmark");
-
-    protected static void trace(String msg) {
-//        System.err.println(msg);
-    }
-
-    protected static void error(String msg, Throwable t) {
-        //System.err.println(msg);
-        //if (printStackTraces) t.printStackTrace();
-    }
-
-    protected static void log(Throwable t) {
+    static void log(Throwable t) {
         if (PRINT_STACK_TRACES) t.printStackTrace();
+    }
+
+    @SuppressWarnings("unused")
+    static String addIdFromRange(String sql, MockParameterMap parameters, String columnName, int row) {
+        int openParIndex = sql.indexOf('(');
+        int closeParIndex = sql.lastIndexOf(')');
+        if (openParIndex < 0 || closeParIndex < openParIndex) {
+            throw new IllegalStateException("Unexpected sql: " + sql);
+        }
+        String[] ids = sql.substring(openParIndex + 1, closeParIndex).split(",");
+        return ids[row].trim(); // row index is 1-based
+    }
+
+    @SuppressWarnings("unused")
+    public static Object getFirstParam(String sql, MockParameterMap parameters, String columnName, int row) {
+       return parameters.get(1);
     }
 
     @State(Scope.Benchmark)
     public abstract static class BenchmarkState<T> {
 
-        @Param(C3P0 + ".mock")
+        @Param("c3p0.mock")
         String persistenceUnit;
 
         @Param("10000")
@@ -121,12 +122,11 @@ public abstract class BenchmarkBase<T> {
         private JacamarHelper jacamarHelper = new JacamarHelper();
         private EntityManagerFactory entityManagerFactory;
         // IDs of Persons that are commonly in the DB to make it big
-        protected ArrayList<Long> regularIds;
+        ArrayList<Long> regularIds;
         private PersistenceUnitUtil persistenceUnitUtil;
         private TransactionManager tm = com.arjuna.ats.jta.TransactionManager.transactionManager();
         private boolean managedTransaction;
-        private SingularAttribute idProperty;
-        private String entityName;
+        private SingularAttribute<T, Long> idProperty;
 
         protected EntityManagerFactory getEntityManagerFactory() {
             return entityManagerFactory;
@@ -150,24 +150,20 @@ public abstract class BenchmarkBase<T> {
                     jndiHelper.start();
                     jtaHelper.start();
                 }
-                if (!secondLevelCache.equals("none") && HIBERNATE_VERSION >= 50002) {
-                    // we always need managed transactions with 2LC since there are multiple participants
-                    managedTransaction = true;
-                }
-                entityManagerFactory = Persistence.createEntityManagerFactory(persistenceUnit,
-                      secondLevelCache.equals("none") ? NON_CACHED_PROPERTIES : getSecondLevelCacheProperties());
+                Map<String, String> properties = secondLevelCache.equals("none") ? NON_CACHED_PROPERTIES : getSecondLevelCacheProperties();
+                System.out.println(properties);
+                entityManagerFactory = Persistence.createEntityManagerFactory(persistenceUnit, properties);
                 persistenceUnitUtil = entityManagerFactory.getPersistenceUnitUtil();
-                regularIds = new ArrayList<Long>(dbSize);
+                regularIds = new ArrayList<>(dbSize);
                 Metamodel metamodel = entityManagerFactory.getMetamodel();
-                EntityType entity = metamodel.entity(getClazz());
-                Set<SingularAttribute> singularAttributes = entity.getSingularAttributes();
-                for (SingularAttribute singularAttribute : singularAttributes) {
+                EntityType<T> entity = metamodel.entity(getClazz());
+                Set<SingularAttribute<? super T, ?>> singularAttributes = entity.getSingularAttributes();
+                for (SingularAttribute<? super T, ?> singularAttribute : singularAttributes) {
                     if (singularAttribute.isId()){
-                        idProperty=singularAttribute;
+                        idProperty = (SingularAttribute<T, Long>) singularAttribute;
                         break;
                     }
                 }
-                entityName = entityManagerFactory.getMetamodel().entity(getClazz()).getName();
                 if (persistenceUnit.contains("mock")) {
                     PerfMockDriver.getInstance().setMocking(true);
                 }
@@ -197,29 +193,23 @@ public abstract class BenchmarkBase<T> {
             handler.prepareGlobalResultSet(nonMatching);
         }
 
-        protected MockResultSet getIncrementing(int initialValue) {
+        MockResultSet getIncrementing(int initialValue) {
             MockResultSet newId = new FunctionalMockResultSet("newId");
             newId.setColumnsCaseSensitive(true);
             AtomicLong counter = new AtomicLong(initialValue);
-            newId.addRow(Collections.<Object>singletonList((Supplier) counter::getAndIncrement));
+            newId.addRow(Collections.singletonList((Supplier) counter::getAndIncrement));
             return newId;
         }
 
         protected Map<String, String> getSecondLevelCacheProperties() {
             Map<String, String> l2Properties = new HashMap<>();
-            if (HIBERNATE_VERSION >= 50002) {
-                // In Hibernate 5.0.2+ we don't need the transactions and can use Infinispan 8.0
-                l2Properties.put(InfinispanRegionFactory.INFINISPAN_CONFIG_RESOURCE_PROP, "2lc-cfg-80.xml");
-            } else {
-                l2Properties.put(InfinispanRegionFactory.INFINISPAN_CONFIG_RESOURCE_PROP, "2lc-cfg-71.xml");
-            }
+            //noinspection deprecation
             l2Properties.put(org.hibernate.jpa.AvailableSettings.SHARED_CACHE_MODE, SharedCacheMode.ALL.toString());
             //properties.put(AvailableSettings.TRANSACTION_TYPE, PersistenceUnitTransactionType.JTA.toString());
             //properties.put("hibernate.transaction.factory_class", JdbcTransactionFactory.class.getName());
             //properties.put("hibernate.transaction.factory_class", JtaTransactionFactory.class.getName());
             //properties.put(Environment.JTA_PLATFORM, "org.hibernate.service.jta.platform.internal.JBossStandAloneJtaPlatform");
-            l2Properties.put(AvailableSettings.CACHE_REGION_FACTORY, InfinispanRegionFactory.class.getName());
-
+            l2Properties.put(AvailableSettings.CACHE_REGION_FACTORY, "infinispan");
             l2Properties.put(AvailableSettings.USE_SECOND_LEVEL_CACHE, "true");
             l2Properties.put(AvailableSettings.USE_QUERY_CACHE, String.valueOf(queryCache));
             l2Properties.put(AvailableSettings.USE_DIRECT_REFERENCE_CACHE_ENTRIES, String.valueOf(directReferenceEntries));
@@ -260,7 +250,7 @@ public abstract class BenchmarkBase<T> {
                     CriteriaBuilder cb = entityManager.getCriteriaBuilder();
                     CriteriaQuery<Long> query = cb.createQuery(Long.class);
                     Root<T> root = query.from(getClazz());
-                    query = query.select(root.<Long>get(idProperty));
+                    query = query.select(root.get(idProperty));
                     Predicate condition = getRootLevelCondition(cb, root);
                     if (condition != null) {
                         query = query.where(condition);
@@ -306,13 +296,10 @@ public abstract class BenchmarkBase<T> {
                             }
                         }
                     } while (failed);
-                    try {
-                        long post = getSize(entityManager);
-                        System.out.printf("DB contained %d entries, %d created, now %d, ids %d\n", pre, created, post, regularIds.size());
-                        if (regularIds.size() != post) {
-                            throw new IllegalStateException();
-                        }
-                    } finally {
+                    long post = getSize(entityManager);
+                    System.out.printf("DB contained %d entries, %d created, now %d, ids %d\n", pre, created, post, regularIds.size());
+                    if (regularIds.size() != post) {
+                        throw new IllegalStateException();
                     }
                 }
             } catch (Exception e) {
@@ -324,14 +311,12 @@ public abstract class BenchmarkBase<T> {
         }
 
         private int addRandomEntities(int numEntries, ThreadLocalRandom random, EntityManager entityManager) throws Exception {
-            ArrayList<T> batchEntities = new ArrayList<T>(batchLoadSize);
+            ArrayList<T> batchEntities = new ArrayList<>(batchLoadSize);
             for (int i = 0; i < numEntries; i++) {
                 T entity = randomEntity(random);
-                trace("Persisting entity " + entity);
                 entityManager.persist(entity);
                 batchEntities.add(entity);
                 if ((i + 1) % batchLoadSize == 0) {
-                    trace("Flushing " + batchEntities.size() + " entities");
                     entityManager.flush();
                     entityManager.clear();
                     // let's commit the transaction in order not to timeout
@@ -345,7 +330,6 @@ public abstract class BenchmarkBase<T> {
                     batchEntities.clear();
                 }
             }
-            trace("Flushing " + batchEntities.size() + " entities");
             entityManager.flush();
             for (T e : batchEntities) {
                 Long id = (Long) persistenceUnitUtil.getIdentifier(e);
@@ -355,52 +339,32 @@ public abstract class BenchmarkBase<T> {
         }
 
         public void beginTransaction(EntityManager entityManager) throws Exception {
-            trace("Transaction begin, state is " + tm.getStatus());
-            try {
-                if (managedTransaction) {
-                    tm.begin();
-                    entityManager.joinTransaction();
-                } else {
-                    entityManager.getTransaction().begin();
-                }
-                trace("Transaction began, state is " + tm.getStatus());
-            } catch (Exception e) {
-                error("Failed starting TX", e);
-                throw e;
+            if (managedTransaction) {
+                tm.begin();
+                entityManager.joinTransaction();
+            } else {
+                entityManager.getTransaction().begin();
             }
         }
 
         public void commitTransaction(EntityManager entityManager) throws Exception {
-            trace("Transaction commit, state is " + tm.getStatus());
-            try {
-                if (managedTransaction) {
-                    tm.commit();
-                } else {
-                    entityManager.getTransaction().commit();
-                }
-                trace("Transaction commited, state is " + tm.getStatus());
-            } catch (Exception e) {
-                error("Failed committing TX", e);
-                throw e;
+            if (managedTransaction) {
+                tm.commit();
+            } else {
+                entityManager.getTransaction().commit();
             }
         }
 
         public void rollbackTransaction(EntityManager entityManager) throws Exception {
-            trace("Rolling back");
-            try {
-                if (managedTransaction) {
-                    if (tm.getStatus() != Status.STATUS_NO_TRANSACTION) {
-                        tm.rollback();
-                    }
-                } else {
-                    EntityTransaction tx = entityManager.getTransaction();
-                    if (tx.isActive()) {
-                        tx.rollback();
-                    }
+            if (managedTransaction) {
+                if (tm.getStatus() != Status.STATUS_NO_TRANSACTION) {
+                    tm.rollback();
                 }
-            } catch (Exception e) {
-                error("Failed rolling back TX", e);
-                throw e;
+            } else {
+                EntityTransaction tx = entityManager.getTransaction();
+                if (tx.isActive()) {
+                    tx.rollback();
+                }
             }
         }
 
@@ -417,7 +381,7 @@ public abstract class BenchmarkBase<T> {
                         Predicate condition = getRootLevelCondition(cb, root);
                         if (allowedIds != null) {
                             // TODO this does not scale well
-                            Predicate allowedCondition = cb.not(root.<Long>get(idProperty).in(allowedIds));
+                            Predicate allowedCondition = cb.not(root.get(idProperty).in(allowedIds));
                             if (condition != null) {
                                 condition = cb.and(condition, allowedCondition);
                             } else {
@@ -442,12 +406,6 @@ public abstract class BenchmarkBase<T> {
                         beginTransaction(entityManager);
                     }
                 } else {
-                    // Hibernate 4.2 does not support JPA 2.1 with delete criteria query
-//                    String jpql = "DELETE FROM " + entityName;
-//                    if (allowedIds != null) {
-//                        jpql += " WHERE " + idProperty.getName() + " NOT IN (" + collectionToString(allowedIds) + ")";
-//                    }
-//                    deleted = entityManager.createQuery(jpql).executeUpdate();
                     CriteriaDelete<T> query = cb.createCriteriaDelete(getClazz());
                     Root<T> root = query.from(getClazz());
                     if (allowedIds != null) {
@@ -470,34 +428,6 @@ public abstract class BenchmarkBase<T> {
 
         protected Predicate getRootLevelCondition(CriteriaBuilder criteriaBuilder, Root<T> root) {
             return null;
-        }
-
-        private int flushEntities(EntityManager entityManager, Map<Long, Integer> ids) throws Exception {
-            if (ids.isEmpty()) return 0;
-            CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-            ArrayList<T> newEntities = new ArrayList<T>(batchLoadSize);
-            CriteriaQuery<Long> query = cb.createQuery(Long.class);
-            Root<T> root = query.from(getClazz());
-            Path<Long> idPath = root.get(idProperty);
-            for (long id : entityManager.createQuery(query.select(idPath).where(idPath.in(ids.keySet()))).getResultList()) {
-                ids.remove(id);
-            }
-            for (int j = ids.size(); j >= 0; --j) {
-                T entity = randomEntity(ThreadLocalRandom.current());
-                entityManager.persist(entity);
-                newEntities.add(entity);
-            }
-            entityManager.flush();
-            commitTransaction(entityManager);
-            beginTransaction(entityManager);
-            // replace all ids
-            int j = 0;
-            for (int index : ids.values()) {
-                regularIds.set(index, (Long) persistenceUnitUtil.getIdentifier(newEntities.get(j++)));
-            }
-            ids.clear();
-            entityManager.clear();
-            return newEntities.size();
         }
 
         @TearDown
@@ -542,7 +472,7 @@ public abstract class BenchmarkBase<T> {
             return entityManager.createQuery(query).getSingleResult();
         }
 
-       protected List<Object> seq(int from, int to) {
+       List<Object> seq(int from, int to) {
            ArrayList<Object> list = new ArrayList<>(to - from);
            for (long i = from; i < to; ++i) {
                list.add(i);
@@ -556,6 +486,10 @@ public abstract class BenchmarkBase<T> {
                list.add(item);
            }
            return list;
+       }
+
+       protected List<Object> list(int size, EvaluableResultSet.Evaluable evaluable) {
+            return list(size, (Object) evaluable);
        }
 
        public abstract Class<T> getClazz();
@@ -578,17 +512,6 @@ public abstract class BenchmarkBase<T> {
     @State(Scope.Thread)
     public static class ThreadState {
         ThreadLocalRandom random = ThreadLocalRandom.current();
-    }
-
-    protected static String collectionToString(Collection collection) {
-        StringBuilder sb = new StringBuilder();
-        for (Object element : collection) {
-            if (sb.length() != 0) {
-                sb.append(", ");
-            }
-            sb.append(element);
-        }
-        return sb.toString();
     }
 
     protected void testCreate(BenchmarkState<T> benchmarkState, ThreadState threadState) throws Exception {
@@ -707,7 +630,8 @@ public abstract class BenchmarkBase<T> {
             benchmarkState.beginTransaction(entityManager);
             try {
                 Collection<Long> ids = randomIds(benchmarkState, threadState.random, threadParams.getThreadIndex(), threadParams.getThreadCount());
-                for (T entity : getEntities(benchmarkState, entityManager, ids)) {
+                List<T> entities = getEntities(benchmarkState, entityManager, ids);
+                for (T entity : entities) {
                     benchmarkState.modify(entity, threadState.random);
                     entityManager.persist(entity);
                 }
@@ -753,7 +677,7 @@ public abstract class BenchmarkBase<T> {
         }
     }
 
-    protected void testCriteriaDelete(BenchmarkState<T> benchmarkState, ThreadState threadState, Blackhole blackhole) throws Exception {
+    void testCriteriaDelete(BenchmarkState<T> benchmarkState, ThreadState threadState, Blackhole blackhole) throws Exception {
         EntityManager entityManager = benchmarkState.entityManagerFactory.createEntityManager();
         try {
             benchmarkState.beginTransaction(entityManager);
@@ -763,8 +687,6 @@ public abstract class BenchmarkBase<T> {
                 CriteriaDelete<T> query = cb.createCriteriaDelete(benchmarkState.getClazz());
                 query.where(query.from(benchmarkState.getClazz()).get(benchmarkState.idProperty).in(randomIds));
                 int deleted = entityManager.createQuery(query).executeUpdate();
-//                String jpql = "DELETE FROM " + benchmarkState.entityName + " WHERE " + benchmarkState.idProperty + " IN (" + collectionToString(randomIds) + ")";
-//                int deleted = entityManager.createQuery(jpql).executeUpdate();
                 // it's possible that some of the entries are already deleted
                 blackhole.consume(deleted);
                 benchmarkState.commitTransaction(entityManager);
@@ -782,13 +704,13 @@ public abstract class BenchmarkBase<T> {
         }
     }
 
-    protected void testQuery(BenchmarkState<T> benchmarkState, Blackhole blackhole, QueryRunner queryRunner) throws Exception {
+    void testQuery(BenchmarkState<T> benchmarkState, Blackhole blackhole, BiFunction<EntityManager, CriteriaBuilder, Collection<?>> queryRunner) throws Exception {
         EntityManager entityManager = benchmarkState.entityManagerFactory.createEntityManager();
         try {
             benchmarkState.beginTransaction(entityManager);
             try {
                 CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-                Collection<?> resultList = queryRunner.runQuery(entityManager, cb);
+                Collection<?> resultList = queryRunner.apply(entityManager, cb);
                 for (Object o : resultList) {
                     blackhole.consume(o);
                 }
@@ -803,7 +725,7 @@ public abstract class BenchmarkBase<T> {
         }
     }
 
-    protected static boolean isLockException(Throwable e) {
+    static boolean isLockException(Throwable e) {
         if (THROW_ON_LOCK_EXCEPTIONS) {
             if (e instanceof OptimisticLockException) {
                 return true;
@@ -811,15 +733,13 @@ public abstract class BenchmarkBase<T> {
                 return true;
             } else if (e.getMessage() != null && e.getMessage().startsWith("Row not found")) {
                 return true;
-            } else if (e.getCause() != null && isLockException(e.getCause())) {
-                return true;
-            }
+            } else return e.getCause() != null && isLockException(e.getCause());
         }
         return false;
     }
 
     private Collection<Long> randomIds(BenchmarkState<T> benchmarkState, ThreadLocalRandom random, int threadId, int threadCount) {
-        Set<Long> ids = new HashSet<Long>(benchmarkState.transactionSize);
+        Set<Long> ids = new HashSet<>(benchmarkState.transactionSize);
         int rangeStart = (benchmarkState.dbSize * threadId) / threadCount;
         int rangeEnd = (benchmarkState.dbSize * (threadId + 1)) / threadCount;
         while (ids.size() < benchmarkState.transactionSize) {
@@ -830,8 +750,8 @@ public abstract class BenchmarkBase<T> {
     }
 
 
-    protected Set<Long> randomIds(BenchmarkState<T> benchmarkState, ThreadLocalRandom random) {
-        Set<Long> ids = new HashSet<Long>(benchmarkState.transactionSize);
+    private Set<Long> randomIds(BenchmarkState<T> benchmarkState, ThreadLocalRandom random) {
+        Set<Long> ids = new HashSet<>(benchmarkState.transactionSize);
         while (ids.size() < benchmarkState.transactionSize) {
             Long id = benchmarkState.getRandomId(random);
             ids.add(id);

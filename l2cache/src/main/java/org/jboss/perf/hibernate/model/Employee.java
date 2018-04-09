@@ -20,7 +20,7 @@ public class Employee {
 
     private String name;
 
-    @ManyToOne(cascade = CascadeType.ALL)
+    @ManyToOne
     private Employer employer;
 
     public Employee() {
@@ -29,6 +29,10 @@ public class Employee {
     public Employee(String name, Employer employer) {
         this.name = name;
         this.employer = employer;
+    }
+
+    public long getId() {
+        return id;
     }
 
     @Override

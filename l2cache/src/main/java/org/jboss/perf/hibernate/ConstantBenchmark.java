@@ -19,14 +19,9 @@ import javax.persistence.criteria.Path;
 import javax.persistence.criteria.Root;
 
 import com.mockrunner.jdbc.PreparedStatementResultSetHandler;
-import com.mockrunner.mock.jdbc.EvaluableResultSet;
 import com.mockrunner.mock.jdbc.MockResultSet;
-import org.hibernate.SessionFactory;
-import org.hibernate.stat.Statistics;
 import org.jboss.perf.hibernate.model.Constant;
 import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.Group;
-import org.openjdk.jmh.annotations.GroupThreads;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.State;
@@ -152,6 +147,12 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
             handler.prepareResultSet("select constant0_\\.id as col_0_0_ from Constant constant0_", all);
 
             MockResultSet single = handler.createResultSet();
+//            EvaluableResultSet.Evaluable evaluable = (EvaluableResultSet.Evaluable) (sql, parameters, columnName, row) -> {
+//                for (int i = sql.length() - 1; i >= 0; --i) {
+//                    if (!Character.isDigit(sql.charAt(i))) return sql.substring(i + 1);
+//                }
+//                return Long.valueOf(0);
+//            };
             single.addColumn("id1_1_0_", new Object[] { 0L });
             single.addColumn("value2_1_0_", new Object[] { "foo" });
             handler.prepareResultSet("select constant0_\\.id as id1_1_0_, constant0_\\.value as value2_1_0_ from Constant constant0_ where constant0_.id=\\?", single);
@@ -207,7 +208,6 @@ public class ConstantBenchmark extends BenchmarkBase<Constant> {
             benchmarkState.commitTransaction(entityManager);
             entityManager.close();
         }
-        trace("Finished dirty enumeration, " + existing + " existing, " + newIds.size() + " new IDs");
 
         for (Iterator<EntityRecord> iterator = updaterState.idToIndex.values().iterator(); iterator.hasNext(); ) {
             EntityRecord record = iterator.next();

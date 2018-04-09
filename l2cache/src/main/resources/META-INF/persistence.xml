@@ -53,7 +53,7 @@
             <property name="hibernate.connection.url" value="jdbc:perfmock:h2:mem:testDB;DB_CLOSE_DELAY=-1;MULTI_THREADED=1" />
             <property name="org.hibernate.flushMode" value="COMMIT" />
             <property name="hibernate.hbm2ddl.auto" value="update" />
-            <property name="hibernate.show_sql" value="true"/>
+            <!--<property name="hibernate.show_sql" value="true"/>-->
 
             <property name="hibernate.c3p0.min_size" value="5" />
             <property name="hibernate.c3p0.max_size" value="20" />
@@ -144,6 +144,16 @@
          <property name="hibernate.hbm2ddl.auto" value="update" />
       </properties>
    </persistence-unit>
+    <persistence-unit name="ironjacamar.h2mem.xa">
+        <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+        <jta-data-source>java:/XADS_h2mem</jta-data-source>
+        <properties>
+            <property name="hibernate.archive.autodetection" value="class" />
+            <property name="hibernate.dialect" value="org.hibernate.dialect.H2Dialect" />
+            <property name="org.hibernate.flushMode" value="COMMIT" />
+            <property name="hibernate.hbm2ddl.auto" value="update" />
+        </properties>
+    </persistence-unit>
     <persistence-unit name="ironjacamar.mock.xa">
         <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
         <jta-data-source>java:/XADS_mock</jta-data-source>
