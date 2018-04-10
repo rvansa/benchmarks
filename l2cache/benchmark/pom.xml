@@ -99,6 +99,10 @@
                     <groupId>org.picketbox</groupId>
                     <artifactId>picketbox</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>org.jboss.logging</groupId>
+                    <artifactId>jboss-logging-spi</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -106,6 +110,12 @@
             <artifactId>ironjacamar-common-impl-papaki</artifactId>
             <version>${version.ironjacamar}</version>
             <scope>runtime</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>javassist</groupId>
+                    <artifactId>javassist</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.jboss.ironjacamar</groupId>
@@ -145,11 +155,23 @@
             <groupId>org.jboss.naming</groupId>
             <artifactId>jnp-client</artifactId>
             <version>${version.org.jboss.naming}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.jboss.logging</groupId>
+                    <artifactId>jboss-logging-spi</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.jboss.naming</groupId>
             <artifactId>jnpserver</artifactId>
             <version>${version.org.jboss.naming}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.jboss.logging</groupId>
+                    <artifactId>jboss-logging-spi</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.experlog</groupId>
@@ -160,6 +182,16 @@
             <groupId>org.jboss.jbossts</groupId>
             <artifactId>jbossjta</artifactId>
             <version>${version.jbossts}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.jboss.logging</groupId>
+                    <artifactId>jboss-logging-spi</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.hibernate.javax.persistence</groupId>
+                    <artifactId>hibernate-jpa-2.0-api</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.jboss.jbossts.jts</groupId>
