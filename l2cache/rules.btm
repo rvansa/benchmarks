@@ -1,0 +1,8 @@
+RULE setEntityEntry
+INTERFACE ^org.hibernate.engine.spi.ManagedEntity
+METHOD $$_hibernate_setEntityEntry
+AT ENTRY
+IF true
+DO traceln(Thread.currentThread().getName() + " " + System.identityHashCode($0)  + " -> " + System.identityHashCode($1));
+ENDRULE
+

@@ -1,0 +1,101 @@
+<benchmark xmlns="urn:radargun:benchmark:3.0">
+   <master bindAddress="${master.address:127.0.0.1}" port="${master.port:2103}"/>
+   <clusters>
+      <cluster size="16">
+         <group name="server" size="8" />
+         <group name="client" size="8" />
+      </cluster>
+   </clusters>
+   <configurations>
+
+      <config name="base">
+         <setup group="server" plugin="infinispan9x">
+            <server xmlns="urn:radargun:plugins:infinispan9x:3.0" file="/home/rvansa/regression-server.xml" jmx-domain="jboss.datagrid-infinispan" cache-manager-name="clustered" start-timeout="120000">
+               <args>
+                  -Djboss.default.multicast.address=234.99.54.20
+                  -Djboss.bind.address=${jgroups.bind_addr} -Djboss.default.jgroups.stack=udp
+               </args>
+               <java-opts>-Xms16g -Xmx16g -XX:+UseLargePages -XX:+UseG1GC -XX:MaxGCPauseMillis=300 -XX:InitiatingHeapOccupancyPercent=70 -verbose:gc -XX:+PrintGCDateStamps -XX:+PrintGCDetails -Xloggc:gc-perf01-%p.log -XX:+PrintTenuringDistribution -XX:+PrintGCApplicationStoppedTime -XX:+PrintGCCause -verbose:gc -Djava.net.preferIPv4Stack=true</java-opts>
+               <home>/tmp/server-sync${slave.index}</home>
+               <server-zip>/home/rvansa/server-sync.zip</server-zip>
+            </server>
+         </setup>
+         <setup group="client" plugin="infinispan9x">
+            <hotrod xmlns="urn:radargun:plugins:infinispan9x:3.0" cache="hotrodDist">
+               <servers>172.18.1.1:11222;172.18.1.3:11222;172.18.1.5:11222;172.18.1.7:11222;172.18.1.9:11222;172.18.1.11:11222;172.18.1.13:11222;172.18.1.15:11222</servers>
+            </hotrod>
+         </setup>
+      </config>
+      <config name="multiplexing">
+         <setup group="server" plugin="infinispan9x">
+            <server xmlns="urn:radargun:plugins:infinispan9x:3.0" file="/home/rvansa/regression-server.xml" jmx-domain="jboss.datagrid-infinispan" cache-manager-name="clustered" start-timeout="120000">
+               <args>
+                  -Djboss.default.multicast.address=234.99.54.20
+                  -Djboss.bind.address=${jgroups.bind_addr} -Djboss.default.jgroups.stack=udp
+               </args>
+               <java-opts>-Xms16g -Xmx16g -XX:+UseLargePages -XX:+UseG1GC -XX:MaxGCPauseMillis=300 -XX:InitiatingHeapOccupancyPercent=70 -verbose:gc -XX:+PrintGCDateStamps -XX:+PrintGCDetails -Xloggc:gc-perf01-%p.log -XX:+PrintTenuringDistribution -XX:+PrintGCApplicationStoppedTime -XX:+PrintGCCause -verbose:gc -Djava.net.preferIPv4Stack=true</java-opts>
+               <home>/tmp/server-async${slave.index}</home>
+               <server-zip>/home/rvansa/server-sync.zip</server-zip>
+            </server>
+         </setup>
+         <setup group="client" plugin="infinispan9x-multi">
+            <hotrod xmlns="urn:radargun:plugins:infinispan9x-multi:3.0" cache="hotrodDist">
+               <servers>172.18.1.1:11222;172.18.1.3:11222;172.18.1.5:11222;172.18.1.7:11222;172.18.1.9:11222;172.18.1.11:11222;172.18.1.13:11222;172.18.1.15:11222</servers>
+            </hotrod>
+         </setup>
+      </config>
+
+
+   </configurations>
+   <init/>
+   <rg:scenario xmlns:rg="urn:radargun:benchmark:3.0"
+                xmlns="urn:radargun:stages:core:3.0"
+                xmlns:cache="urn:radargun:stages:cache:3.0"
+                xmlns:l="urn:radargun:stages:legacy:3.0">
+      <!-- <define var="num.entries" value="#{ ( 8 * 8000000000 ) / ( ${env.BENCHMARK_ENTRY_SIZE:10000} * 2 ) }" /> -->
+      <!-- <define var="entry.size" value="${env.BENCHMARK_ENTRY_SIZE:10000}" /> -->
+      <define var="num.entries" value="3200000" />
+      <define var="entry.size" value="10000" />
+
+      <service-start groups="server"/>
+      <service-start groups="client"/>
+      <cluster-split-verify groups="server" />
+
+      <cache:load groups="client" num-entries="${num.entries}" entry-size="${entry.size}" num-threads="40"/>
+
+      <l:basic-operations-test groups="client" test-name="warmup" num-threads-per-node="50" duration="1m" entry-size="${entry.size}">
+         <l:key-selector>
+            <l:concurrent-keys total-entries="${num.entries}" />
+         </l:key-selector>
+      </l:basic-operations-test>
+                  
+      <l:basic-operations-test groups="client" test-name="reads10" duration="1m" num-threads-per-node="10" entry-size="${entry.size}" get-ratio="1" put-ratio="0">
+         <l:key-selector>
+            <l:concurrent-keys total-entries="${num.entries}" />
+         </l:key-selector>
+         <statistics>
+           <common/>
+         </statistics>
+      </l:basic-operations-test>
+
+      <l:basic-operations-test groups="client" test-name="reads100" duration="1m" num-threads-per-node="100" entry-size="${entry.size}" get-ratio="1" put-ratio="0">
+         <l:key-selector>
+            <l:concurrent-keys total-entries="${num.entries}" />
+         </l:key-selector>
+         <statistics>
+           <common/>
+         </statistics>
+      </l:basic-operations-test>
+
+      <cluster-split-verify groups="server" verify="true" />
+      <service-stop />
+   </rg:scenario>
+   <cleanup check-memory="false" check-memory-released="false" check-threads="false"/>
+
+   <reports>
+      <reporter type="html" />
+      <reporter type="serialized" />
+   </reports>
+
+</benchmark>
+

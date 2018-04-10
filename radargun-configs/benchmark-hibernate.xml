@@ -1,7 +1,5 @@
-<!-- RadarGun 2.0 benchmark -->
-<benchmark xmlns="urn:radargun:benchmark:2.1">
+<benchmark xmlns="urn:radargun:benchmark:3.0">
 
-   <!-- Specifies where should the master open socket  -->
    <master bindAddress="${master.address:127.0.0.1}" port="${master.port:2103}"/>
 
    <!-- List of cluster configurations where the benchmark should run-->
@@ -19,7 +17,7 @@
             <vm-args>
                <memory min="4G" max="4G" />
             </vm-args>
-            <default xmlns="urn:radargun:plugins:hibernate-orm5:2.1" persistence-unit="default" hbm2ddl-auto="UPDATE">
+            <default xmlns="urn:radargun:plugins:hibernate-orm5:3.0" persistence-unit="default" hbm2ddl-auto="UPDATE">
                <connection-pool>
                   <iron-jacamar data-source-jndi="java:/XADS_postgres" jta="true">
                      <datasource-definitions>
@@ -56,13 +54,13 @@
                   <property name="infinispan.stats.enabled" value="true" />
                </properties>
             </vm-args>
-            <default xmlns="urn:radargun:plugins:hibernate-orm5:2.1"
+            <default xmlns="urn:radargun:plugins:hibernate-orm5:3.0"
                      transaction-timeout="900"
                      persistence-unit="default"
                      hbm2ddl-auto="UPDATE">
                <cache>
                   <infinispan use-query-cache="false"
-                              cache-concurrency-strategy="READ_ONLY"
+                              default-cache-concurrency-strategy="READ_ONLY"
                               shared-cache-mode="ALL"
                               configuration="distributed-2lc.xml">
                      <class-mappings>
@@ -99,16 +97,19 @@
    </configurations>
 
    <!-- Sequence of stages executed on the cluster -->
-   <scenario>
-      <service-start />
-      <jvm-monitor-start />
-      <define var="num.entities" value="100000" />
+   <rg:scenario
+           xmlns:rg="urn:radargun:benchmark:3.0"
+           xmlns:core="urn:radargun:stages:core:3.0"
+           xmlns="urn:radargun:stages:jpa:3.0">
+      <core:service-start />
+      <core:jvm-monitor-start />
+      <core:define var="num.entities" value="100000" />
       <load-entities num-entites="${num.entities}" drop-before-load="true">
          <entity-generator>
             <constant length="20" />
          </entity-generator>
       </load-entities>
-      <crud-operations-scheduled duration="30s" test-name="warmup"
+      <crud-operations-test-setup duration="30s" test-name="warmup"
                         transaction-size="10"
                         ramp-up="5s"
                         min-waiting-threads="4"
@@ -117,7 +118,8 @@
          <create-txs invocations="1" interval="50" />
          <delete-txs invocations="1" interval="50" />
          <read-txs invocations="1" interval="10" />
-      </crud-operations-scheduled>
+      </crud-operations-test-setup>
+      <crud-operations-test duration="30s"/>
 
       <load-entities num-entites="100000" drop-before-load="true">
          <entity-generator>
@@ -125,7 +127,7 @@
          </entity-generator>
       </load-entities>
 
-      <repeat name="100k" from="2" to="6">
+      <rg:repeat name="100k" from="2" to="6">
          <crud-operations-scheduled test-name="100k" amend-test="true"
                                     ramp-up="10s" duration="60s"
                                     transaction-size="10"
@@ -145,7 +147,7 @@
             <read-txs invocations="${repeat.100k.counter}" interval="10" />
 
          </crud-operations-scheduled>
-      </repeat>
+      </rg:repeat>
 
       <load-entities num-entites="1000000" drop-before-load="true">
          <entity-generator>
@@ -153,7 +155,7 @@
          </entity-generator>
       </load-entities>
 
-      <repeat name="1M" from="2" to="6">
+      <rg:repeat name="1M" from="2" to="6">
          <crud-operations-scheduled test-name="1M" amend-test="true"
                                     ramp-up="10s" duration="60s"
                                     transaction-size="10"
@@ -173,22 +175,22 @@
             <read-txs invocations="${repeat.1M.counter}" interval="10" />
 
          </crud-operations-scheduled>
-      </repeat>
-      <service-stop />
-   </scenario>
+      </rg:repeat>
+      <core:service-stop />
+   </rg:scenario>
 
    <!-- How the statistics are reported -->
    <reports>
       <reporter type="html">
          <report>
-            <html xmlns="urn:radargun:reporters:reporter-default:2.1">
-               <test-report combined-tests="[100k,1M]" />
+            <html xmlns="urn:radargun:reporters:reporter-default:3.0">
+               <test-report combined-tests="[100k,1M]"/>
             </html>
          </report>
       </reporter>
       <reporter type="serialized">
          <report>
-            <serialized xmlns="urn:radargun:reporters:reporter-default:2.1" />
+            <serialized xmlns="urn:radargun:reporters:reporter-default:3.0" />
          </report>
       </reporter>
    </reports>

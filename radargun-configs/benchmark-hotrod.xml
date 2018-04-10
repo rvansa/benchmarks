@@ -1,0 +1,148 @@
+<!-- RadarGun 3.0 benchmark -->
+<benchmark xmlns="urn:radargun:benchmark:3.0">
+
+   <!-- Specifies where should the master open socket -->
+   <master bindAddress="${master.address:127.0.0.1}" port="${master.port:2103}" />
+
+   <!-- List of cluster configurations where the benchmark should run -->
+   <clusters>
+      <!--<cluster size="2">-->
+         <!--<group name="server" size="1" />-->
+         <!--<group name="client" size="1" />-->
+      <!--</cluster>-->
+      <!--<cluster size="4">-->
+         <!--<group name="server" size="2" />-->
+         <!--<group name="client" size="2" />-->
+      <!--</cluster>-->
+      <cluster size="8">
+         <group name="server" size="4" />
+         <group name="client" size="4" />
+      </cluster>
+   </clusters>
+
+   <!-- List of configurations of the services -->
+   <configurations>
+      <template name="server-template">
+         <server xmlns="urn:radargun:plugins:infinispan90:3.0" file="streaming.xml"
+                 jmx-domain="jboss.datagrid-infinispan" start-timeout="120000" cache-manager-name="clustered">
+            <!-- Arguments making sure node names and binding ports do not overlap -->
+            <args>
+               -Djava.net.preferIPv4Stack=true
+               -Djboss.node.name=node${slave.index}
+            </args>
+            <java-opts>-server -Xms2g -Xmx4g -XX:MaxPermSize=4G -verbose:gc -XX:StartFlightRecording=delay=20s,duration=24h,filename=/tmp/${config.name}.${slave.index}.jfr,settings=profile</java-opts>
+            <!-- Working directory for slave -->
+            <home>/tmp/slave${slave.index}</home>
+            <!-- Path to server ZIP file -->
+            <server-zip>/home/rvansa/infinispan-server-9.2.0-SNAPSHOT.zip</server-zip>
+         </server>
+      </template>
+      <template name="client-template">
+         <vm-args>
+            <memory max="1G" />
+            <flight-recorder enabled="true" filename="/tmp/${config.name}.${slave.index}.jfr" settings="profile"/>
+         </vm-args>
+         <hotrod xmlns="urn:radargun:plugins:infinispan90:3.0">
+            <servers>172.18.1.1:11222;172.18.1.2:11222</servers>
+         </hotrod>
+      </template>
+
+      <config name="master">
+         <setup group="server" plugin="infinispan92-master" base="server-template">
+            <server xmlns="urn:radargun:plugins:infinispan90:3.0" />
+         </setup>
+         <setup group="client" plugin="infinispan92-master" base="client-template">
+            <hotrod xmlns="urn:radargun:plugins:infinispan90:3.0" />
+         </setup>
+      </config>
+      <config name="confirm">
+         <setup group="server" plugin="infinispan92-master" base="server-template">
+            <server xmlns="urn:radargun:plugins:infinispan90:3.0" />
+         </setup>
+         <setup group="client" plugin="infinispan92-master" base="client-template">
+            <hotrod xmlns="urn:radargun:plugins:infinispan90:3.0" />
+         </setup>
+      </config>
+      <config name="netty">
+         <setup group="server" plugin="infinispan92-master" base="server-template">
+            <server xmlns="urn:radargun:plugins:infinispan90:3.0" />
+         </setup>
+         <setup group="client" plugin="infinispan92-netty" base="client-template">
+            <hotrod xmlns="urn:radargun:plugins:infinispan90:3.0" />
+         </setup>
+      </config>
+
+   </configurations>
+
+   <!-- Sequence of stages executed on the cluster -->
+   <rg:scenario xmlns:rg="urn:radargun:benchmark:3.0" xmlns="urn:radargun:stages:core:3.0"
+      xmlns:cache="urn:radargun:stages:cache:3.0">
+      <!-- Start services on all nodes -->
+      <service-start groups="server"/>
+      <service-start groups="client"/>
+
+      <define var="num.entries" value="1600000" />
+      <define var="entry.size" value="10000" />
+
+      <cache:load num-entries="${num.entries}" groups="client" num-threads="40"/>
+
+      <!-- Warmup the server first Note: name "warmup" signifies that the test will not be included in 
+         results -->
+      <cache:basic-operations-test test-name="warmup" entry-size="${entry.size}"
+                                   num-threads-per-node="50" duration="30s" groups="client">
+         <cache:key-selector>
+            <cache:concurrent-keys total-entries="${num.entries}" />
+         </cache:key-selector>
+      </cache:basic-operations-test>
+
+      <cache:basic-operations-test test-name="read1" entry-size="${entry.size}"
+                                   num-threads-per-node="1" duration="30s" groups="client" put-ratio="0">
+         <cache:key-selector>
+            <cache:concurrent-keys total-entries="${num.entries}" />
+         </cache:key-selector>
+      </cache:basic-operations-test>
+
+      <cache:basic-operations-test test-name="write1" entry-size="${entry.size}"
+                                   num-threads-per-node="1" duration="30s" groups="client" get-ratio="0">
+         <cache:key-selector>
+            <cache:concurrent-keys total-entries="${num.entries}" />
+         </cache:key-selector>
+      </cache:basic-operations-test>
+
+      <cache:basic-operations-test test-name="read10" entry-size="${entry.size}"
+                                   num-threads-per-node="10" duration="30s" groups="client" put-ratio="0">
+         <cache:key-selector>
+            <cache:concurrent-keys total-entries="${num.entries}" />
+         </cache:key-selector>
+      </cache:basic-operations-test>
+
+      <cache:basic-operations-test test-name="write10" entry-size="${entry.size}"
+                                   num-threads-per-node="10" duration="30s" groups="client" get-ratio="0">
+         <cache:key-selector>
+            <cache:concurrent-keys total-entries="${num.entries}" />
+         </cache:key-selector>
+      </cache:basic-operations-test>
+
+      <cache:basic-operations-test test-name="read100" entry-size="${entry.size}"
+                                   num-threads-per-node="100" duration="30s" groups="client" put-ratio="0">
+         <cache:key-selector>
+            <cache:concurrent-keys total-entries="${num.entries}" />
+         </cache:key-selector>
+      </cache:basic-operations-test>
+
+      <cache:basic-operations-test test-name="write100" entry-size="${entry.size}"
+                                   num-threads-per-node="100" duration="30s" groups="client" get-ratio="0">
+         <cache:key-selector>
+            <cache:concurrent-keys total-entries="${num.entries}" />
+         </cache:key-selector>
+      </cache:basic-operations-test>
+
+   </rg:scenario>
+
+   <!-- How the statistics are reported -->
+   <reports>
+      <reporter type="html" />
+      <!-- Store Java-serialized version of the results that can be used to re-run the report -->
+      <reporter type="serialized" />
+   </reports>
+</benchmark>

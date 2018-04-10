@@ -1,0 +1,13 @@
+RULE test
+CLASS ^java.lang.Object
+#CLASS org.jboss.perf.hibernate.Foo
+METHOD <init>
+#HELPER org.jboss.perf.hibernate.Tracer
+AT ENTRY
+IF true
+#IF !$CLASS.startsWith("sun.reflect")
+DO
+  org.jboss.perf.hibernate.Tracer.disableTracing();
+  org.jboss.perf.hibernate.Tracer.created($CLASS);
+  org.jboss.perf.hibernate.Tracer.enableTracing();
+ENDRULE

@@ -1,7 +1,5 @@
 package org.jboss.perf.hibernate;
 
-import java.lang.reflect.Method;
-
 import com.arjuna.ats.jta.TransactionManager;
 import org.infinispan.Cache;
 import org.infinispan.configuration.cache.ConfigurationBuilder;
@@ -16,6 +14,8 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.infra.Blackhole;
+
+import java.lang.reflect.Method;
 
 public class IspnBenchmark {
     private static final String NONTX_CACHE = "nonTxCache";
@@ -56,10 +56,13 @@ public class IspnBenchmark {
             gcb.globalJmxStatistics().allowDuplicateDomains(true).enabled(false);
 
             ConfigurationBuilder nonTxBuilder = new ConfigurationBuilder();
+            nonTxBuilder.jmxStatistics().enabled(false);//.available(false);
             ConfigurationBuilder syncBuilder = new ConfigurationBuilder();
-            syncBuilder.transaction().transactionMode(TransactionMode.TRANSACTIONAL).useSynchronization(true);
+            syncBuilder.transaction().transactionMode(TransactionMode.TRANSACTIONAL).useSynchronization(true);//.notifications(false);
+            syncBuilder.jmxStatistics().enabled(false);//.available(false);
             ConfigurationBuilder xaBuilder = new ConfigurationBuilder();
-            xaBuilder.transaction().transactionMode(TransactionMode.TRANSACTIONAL).useSynchronization(false);
+            xaBuilder.transaction().transactionMode(TransactionMode.TRANSACTIONAL).useSynchronization(false);//.notifications(false);
+            xaBuilder.jmxStatistics().enabled(false);//.available(false);
 
             cacheManager = new DefaultCacheManager(gcb.build());
             cacheManager.defineConfiguration(NONTX_CACHE, nonTxBuilder.build());
@@ -104,12 +107,8 @@ public class IspnBenchmark {
     @Benchmark
     public void testGet(IspnState state, Blackhole blackhole) {
         state.invocations++;
-        try {
-            Object value = state.cache.get("key");
-            blackhole.consume(value);
-        } catch (Throwable t) {
-            t.printStackTrace();
-        }
+        Object value = state.cache.get("key");
+        blackhole.consume(value);
     }
 
     @Benchmark

@@ -1,0 +1,10 @@
+RULE Iterator_init
+INTERFACE ^java.util.Iterator
+METHOD <init>
+AT EXIT
+BIND down : java.util.Iterator = $0;
+IF TRUE
+DO
+   setTriggering(false);
+   System.err.println(down.hasNext());
+ENDRULE

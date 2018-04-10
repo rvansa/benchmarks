@@ -1,0 +1,146 @@
+<!-- RadarGun 3.0 benchmark -->
+<benchmark xmlns="urn:radargun:benchmark:3.0">
+
+   <master bindAddress="${master.address:127.0.0.1}" port="${master.port:2103}" />
+
+   <clusters>
+      <cluster>
+         <group name="servers" size="2"/>
+         <group name="clients" size="1"/>
+      </cluster>
+   </clusters>
+
+   <configurations>
+      <!--<config name="Docker">-->
+         <!--<setup group="servers" plugin="docker">-->
+            <!--<docker xmlns="urn:radargun:plugins:docker:3.0" -->
+                            <!--image="rvansa/infinispan-server"-->
+                            <!--network="host"-->
+                            <!--cmd="-c standalone.xml -b 127.0.0.1 -n -J -Xmx1G"-->
+                            <!--await-log=".*WFLYSRV0025.*">-->
+               <!--<exposed-ports>-->
+                   <!--11222/tcp-->
+               <!--</exposed-ports>-->
+            <!--</docker>-->
+         <!--</setup>-->
+         <!--<setup group="clients" plugin="infinispan90">-->
+             <!--<hotrod xmlns="urn:radargun:plugins:infinispan90:3.0">-->
+                 <!--<servers>-->
+                   <!--127.0.0.1:11222-->
+                 <!--</servers>-->
+             <!--</hotrod>-->
+         <!--</setup>-->
+      <!--</config>-->
+      <!--<config name="Standalone">-->
+         <!--<setup group="servers" plugin="infinispan90">-->
+             <!--<server xmlns="urn:radargun:plugins:infinispan90:3.0"-->
+                <!--home="${env.HOME}/releases/infinispan/infinispan-server-9.0.0.Final"-->
+                <!--file="standalone.xml"-->
+                <!--java="/etc/alternatives/java_sdk"-->
+                <!--java-opts="-server -Djava.awt.headless=true -Xmx1G -Xms64m -Djava.net.preferIPv4Stack=true"-->
+                <!--jmx-domain="jboss.datagrid-infinispan"-->
+                <!--args="-b 127.0.0.1"-->
+                <!--cache-manager-name="local">-->
+             <!--</server>-->
+         <!--</setup>-->
+         <!--<setup group="clients" plugin="infinispan90">-->
+            <!--<hotrod xmlns="urn:radargun:plugins:infinispan90:3.0">-->
+               <!--<servers>-->
+                  <!--127.0.0.1:11222-->
+               <!--</servers>-->
+            <!--</hotrod>-->
+         <!--</setup>-->
+      <!--</config>-->
+      <config name="Docker Clustered">
+         <setup group="servers" plugin="docker">
+            <docker xmlns="urn:radargun:plugins:docker:3.0"
+                    image="rvansa/infinispan-server"
+                    network="host"
+                    cmd="-c clustered.xml -n -J -Xmx1G -b 192.168.11.#{101 + ${slave.index}}"
+                    await-log=".*WFLYSRV0025.*">
+               <exposed-ports>
+                  11222/tcp
+               </exposed-ports>
+            </docker>
+         </setup>
+         <setup group="clients" plugin="infinispan90">
+            <hotrod xmlns="urn:radargun:plugins:infinispan90:3.0">
+                   <servers>192.168.11.101:11222;192.168.11.102:11222</servers>
+               </hotrod>
+           </setup>
+       </config>
+      <config name="Clustered">
+         <setup group="servers" plugin="infinispan90">
+             <!--java="/etc/alternatives/java_sdk"-->
+             <!--java-opts="-server -Djava.awt.headless=true -Xmx1G -Xms64m -Djava.net.preferIPv4Stack=true -XX:+PreserveFramePointer -XX:-Inline -agentpath:/home/rvansa/workspace/perfjava/libperfjava.so"-->
+            <server xmlns="urn:radargun:plugins:infinispan90:3.0"
+                    home="${env.HOME}/releases/infinispan/infinispan-server-9.0.0.Final"
+                    file="clustered.xml"
+                    java="/etc/alternatives/java_sdk"
+                    java-opts="-server -Djava.awt.headless=true -Xmx1G -Xms64m -Djava.net.preferIPv4Stack=true"
+                    jmx-domain="jboss.datagrid-infinispan"
+                    args="-b 192.168.11.#{101 + ${slave.index}}"
+                    cache-manager-name="clustered">
+            </server>
+         </setup>
+         <setup group="clients" plugin="infinispan90">
+            <hotrod xmlns="urn:radargun:plugins:infinispan90:3.0">
+               <servers>192.168.11.101:11222;192.168.11.102:11222</servers>
+            </hotrod>
+         </setup>
+      </config>
+   </configurations>
+
+   <rg:scenario xmlns:rg="urn:radargun:benchmark:3.0"
+                xmlns:cache="urn:radargun:stages:cache:3.0"
+                xmlns="urn:radargun:stages:core:3.0">
+      <service-start groups="servers"/>
+      <service-start groups="clients"/>
+
+      <cache:basic-operations-test groups="clients" test-name="warmup" duration="10s" num-threads-per-node="20">
+          <statistics>
+              <common/>
+          </statistics>
+          <cache:cache-selector>
+              <cache:default />
+          </cache:cache-selector>
+          <cache:key-generator>
+              <cache:string />
+          </cache:key-generator>
+          <cache:value-generator>
+              <cache:byte-array/>
+          </cache:value-generator>
+          <cache:key-selector>
+              <cache:concurrent-keys total-entries="10000" />
+          </cache:key-selector>
+      </cache:basic-operations-test>
+
+       <!--<command groups="servers" cmd="perf" args="record -F 99 -a -g -p ${service.pids:} -o /tmp/perf${slave.index}.dat" wait-for-exit="false" var="perf"/>-->
+       <!--<command groups="servers" cmd="sudo" args="/usr/share/bcc/tools/offcputime -f -p ${service.pids:} 65" wait-for-exit="false" var="offcpu" out="/tmp/offcpu${slave.index}.trace"/>-->
+       <!--<command groups="servers" cmd="sudo" args="/usr/share/bcc/tools/profile -F 99 -f -p ${service.pids:} 65" wait-for-exit="false" var="oncpu" out="/tmp/oncpu${slave.index}.trace"/>-->
+       <!--<command groups="servers" cmd="/home/rvansa/workspace/async-profiler/profiler.sh" args="-p ${service.pids:} -a start" />-->
+       <cache:basic-operations-test groups="clients" test-name="basic" duration="60s" num-threads-per-node="20">
+           <statistics>
+               <common/>
+           </statistics>
+           <cache:key-selector>
+               <cache:concurrent-keys total-entries="10000" />
+           </cache:key-selector>
+       </cache:basic-operations-test>
+       <!--<command groups="servers" cmd="/home/rvansa/workspace/async-profiler/profiler.sh" args="-p ${service.pids:} -f /tmp/async${slave.index}.txt -a dump" />-->
+       <!--<command groups="servers" var="oncpu" />-->
+       <!--<command groups="servers" var="offcpu" />-->
+       <!--<command groups="servers" var="perf" cancel="true" exit-values="0,143,255"/>-->
+       <!--<command groups="servers" cmd="java" args="-cp /home/rvansa/workspace/perf-map-agent/out/attach-main.jar:${env.JAVA_HOME}/lib/tools.jar net.virtualvoid.perf.AttachOnce ${service.pids:} dottedclass"/>-->
+   </rg:scenario>
+
+   <reports>
+     <reporter type="serialized">
+       <serialized xmlns="urn:radargun:reporters:reporter-default:3.0" target-dir="${env.PWD}/results/serialized" />
+     </reporter>
+     <reporter type="html">
+       <html xmlns="urn:radargun:reporters:reporter-default:3.0" target-dir="${env.PWD}/results/html" />
+     </reporter>
+   </reports>
+
+</benchmark>

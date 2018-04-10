@@ -1,0 +1,164 @@
+<!-- RadarGun 2.1 benchmark -->
+<benchmark xmlns="urn:radargun:benchmark:3.0">
+
+   <master bindAddress="${master.address:127.0.0.1}" port="${master.port:2103}"/>
+
+   <clusters>
+      <cluster size="4"/>
+   </clusters>
+
+   <!-- List of configurations of the services -->
+   <configurations>
+       <template name="common">
+           <vm-args>
+               <!--<flight-recorder enabled="true" filename="/home/vansa1/tmp/record_2lc_${env.HOSTNAME}_${cluster.size}.jfr" settings="sampling"/>-->
+               <gc print-gc="true"/>
+               <properties>
+                   <property name="jgroups.tcp.address" value="GLOBAL"/>
+                   <property name="jgroups.tcp.interface" value="eth2"/>
+                   <property name="infinispan.stats.enabled" value="true" />
+               </properties>
+           </vm-args>
+           <default xmlns="urn:radargun:plugins:hibernate-orm5:3.0"
+                    transaction-timeout="900"
+                    persistence-unit="default"
+                    hbm2ddl-auto="UPDATE"
+                    generate-statistics="true"
+                    log-session-metrics="false">
+               <cache>
+                   <infinispan use-query-cache="false"
+                               use-minimal-puts="false"
+                               shared-cache-mode="ALL"
+                               default-cache-concurrency-strategy="READ_WRITE">
+                   </infinispan>
+               </cache>
+               <connection-pool>
+                   <iron-jacamar data-source-jndi="java:/XADS_postgres" jta="true">
+                       <datasource-definitions>
+                           <datasources xmlns="http://www.ironjacamar.org/doc/schema"
+                                        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                                        xsi:schemaLocation="http://www.ironjacamar.org/doc/schema http://www.ironjacamar.org/doc/schema/datasources_1_0.xsd">
+                               <xa-datasource jndi-name="java:/XADS_postgres" pool-name="PostgresXAPool">
+                                   <xa-datasource-property name="ServerName">cluster10</xa-datasource-property>
+                                   <xa-datasource-property name="DatabaseName">testdb</xa-datasource-property>
+                                   <xa-datasource-property name="User">test</xa-datasource-property>
+                                   <xa-datasource-class>org.postgresql.xa.PGXADataSource</xa-datasource-class>
+                                   <xa-pool>
+                                       <min-pool-size>5</min-pool-size>
+                                       <max-pool-size>200</max-pool-size>
+                                       <prefill>false</prefill>
+                                   </xa-pool>
+                               </xa-datasource>
+                           </datasources>
+                       </datasource-definitions>
+                   </iron-jacamar>
+               </connection-pool>
+               <database>
+                   <postgres94 />
+               </database>
+           </default>
+       </template>
+       <template name="invalidation" base="common">
+           <default xmlns="urn:radargun:plugins:hibernate-orm5:3.0">
+               <cache>
+                   <infinispan configuration="distributed-2lc-invalidation.xml" />
+               </cache>
+           </default>
+       </template>
+       <template name="read-write" base="common">
+           <default xmlns="urn:radargun:plugins:hibernate-orm5:3.0">
+               <cache>
+                   <infinispan configuration="distributed-2lc-replicated.xml" />
+               </cache>
+           </default>
+       </template>
+       <template name="non-strict" base="common">
+           <default xmlns="urn:radargun:plugins:hibernate-orm5:3.0">
+               <cache>
+                   <infinispan configuration="distributed-2lc-replicated.xml">
+                       <cache-settings-overrides>
+                           <override class="org.radargun.jpa.entities.VersionedText" strategy="NONSTRICT_READ_WRITE" />
+                       </cache-settings-overrides>
+                   </infinispan>
+               </cache>
+           </default>
+       </template>
+       <config name="Invalidation">
+           <setup plugin="hibernate-orm5" base="invalidation" />
+       </config>
+       <config name="Replicated RW">
+           <setup plugin="hibernate-orm5" base="read-write" />
+       </config>
+       <config name="Replicated NSRW">
+           <setup plugin="hibernate-orm5" base="non-strict" />
+       </config>
+       <config name="Invalidation 525">
+           <setup plugin="hibernate-orm525" base="invalidation" />
+       </config>
+       <config name="Replicated RW 525">
+           <setup plugin="hibernate-orm5" base="read-write" />
+       </config>
+       <config name="Replicated NSRW 525">
+           <setup plugin="hibernate-orm525" base="non-strict" />
+       </config>
+   </configurations>
+
+   <!-- Sequence of stages executed on the cluster -->
+   <rg:scenario xmlns:rg="urn:radargun:benchmark:3.0"
+                xmlns="urn:radargun:stages:core:3.0"
+                xmlns:jpa="urn:radargun:stages:jpa:3.0">
+      <service-start />
+      <jvm-monitor-start />
+      <define var="num.entities" value="20000" />
+
+      <jpa:load-entities num-entites="${num.entities}" drop-before-load="true">
+         <jpa:entity-generator>
+            <jpa:versioned-text length="20" />
+         </jpa:entity-generator>
+      </jpa:load-entities>
+       <rg:repeat name="outer" from="1" to="5">
+          <jpa:clear-second-level-cache slaves="0"/>
+          <jpa:crud-operations-test-setup log-request-exceptions="true" log-transaction-exceptions="true"
+                                          ramp-up-min-waiting-threads="32"
+                                          min-threads="32"
+                                          max-threads="500">
+             <jpa:create interval="100" invocations="${repeat.outer.counter}" />
+             <jpa:delete interval="100" invocations="${repeat.outer.counter}" />
+             <jpa:read interval="30" invocations="#{ 5 * ${repeat.outer.counter} }" />
+             <jpa:update interval="100" invocations="#{ 3 * ${repeat.outer.counter} }" />
+          </jpa:crud-operations-test-setup>
+          <jpa:clear-second-level-cache slaves="0"/>
+          <rg:repeat times="5">
+             <jpa:crud-operations-test duration="2m" amend-test="true" finish="false">
+                <statistics>
+                   <basic>
+                      <operation-stats>
+                         <basic/>
+                         <histogram />
+                      </operation-stats>
+                   </basic>
+                </statistics>
+             </jpa:crud-operations-test>
+          </rg:repeat>
+       </rg:repeat>
+       <finish-test />
+       <!--<jpa:list-entities cached="true" />-->
+       <service-stop />
+   </rg:scenario>
+
+   <!-- How the statistics are reported -->
+   <reports>
+      <reporter type="html">
+         <report>
+            <html xmlns="urn:radargun:reporters:reporter-default:3.0">
+            </html>
+         </report>
+      </reporter>
+      <!--<reporter type="serialized">-->
+         <!--<report>-->
+            <!--<serialized xmlns="urn:radargun:reporters:reporter-default:3.0" />-->
+         <!--</report>-->
+      <!--</reporter>-->
+   </reports>
+
+</benchmark>

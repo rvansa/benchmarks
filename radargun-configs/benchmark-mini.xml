@@ -1,0 +1,98 @@
+<!-- RadarGun 2.2 benchmark -->
+<benchmark xmlns="urn:radargun:benchmark:3.0">
+
+    <!-- Specifies where should the master open socket  -->
+    <master bindAddress="${master.address:127.0.0.1}" port="${master.port:2103}"/>
+
+    <clusters>
+        <cluster size="4"/>
+    </clusters>
+
+    <!-- List of configurations of the services -->
+    <configurations>
+        <config name="Hazelcast 3.6.2">
+            <setup plugin="hazelcast3">
+                <vm-args>
+                    <flight-recorder enabled="true" filename="/tmp/mini-${slave.index}.jfr" settings="profile"/>
+                    <properties>
+                        <property name="org.mft.nodeId" value="${slave.index}"/>
+                        <property name="org.mft.output" value="/tmp/mini-${slave.index}.bin"/>
+                    </properties>
+                </vm-args>
+                <hazelcast xmlns="urn:radargun:plugins:hazelcast3:3.0" file="dist-sync.xml"/>
+            </setup>
+        </config>
+        <config name="9.0 SCATTERED">
+            <setup plugin="infinispan90">
+                <vm-args>
+                    <!--<flight-recorder enabled="true" filename="/tmp/mini-${slave.index}.jfr" settings="profile"/>-->
+                    <properties>
+                        <property name="jgroups.config" value="jgroups-tcp.xml" />
+                        <property name="jgroups.bundler" value="transfer-queue" />
+                        <property name="org.mft.nodeId" value="${slave.index}"/>
+                        <property name="org.mft.output" value="/tmp/mini-${slave.index}.bin"/>
+                        <!--<property name="jgroups.tcp.address" value="e${env.HOSTNAME}"/>-->
+                    </properties>
+                </vm-args>
+                <embedded xmlns="urn:radargun:plugins:infinispan90:3.0" file="scattered-sync.xml"/>
+            </setup>
+        </config>
+        <config name="9.0 DIST">
+            <setup plugin="infinispan90">
+                <vm-args>
+                    <!--<flight-recorder enabled="true" filename="/tmp/mini-${slave.index}.jfr" settings="profile"/>-->
+                    <properties>
+                        <property name="jgroups.config" value="jgroups-tcp.xml" />
+                        <property name="jgroups.bundler" value="transfer-queue" />
+                        <property name="org.mft.nodeId" value="${slave.index}"/>
+                        <property name="org.mft.output" value="/tmp/mini-${slave.index}.bin"/>
+                        <!--<property name="jgroups.tcp.address" value="e${env.HOSTNAME}"/>-->
+                    </properties>
+                </vm-args>
+                <embedded xmlns="urn:radargun:plugins:infinispan82:3.0" file="dist-sync.xml"/>
+            </setup>
+        </config>
+    </configurations>
+
+    <!-- Sequence of stages executed on the cluster -->
+    <rg:scenario xmlns:rg="urn:radargun:benchmark:3.0"
+                 xmlns:cache="urn:radargun:stages:cache:3.0"
+                 xmlns:l="urn:radargun:stages:legacy:3.0"
+                 xmlns="urn:radargun:stages:core:3.0">
+        <!-- Start services on all nodes -->
+        <service-start />
+        <!-- Begin monitoring of CPU, memory usage and GC -->
+        <!--<jvm-monitor-start />-->
+
+        <!-- Preload the cache with data -->
+        <cache:load num-entries="${entry.count:1000}"/>
+
+        <l:basic-operations-test test-name="mixed" duration="60s"
+                                 put-ratio="2" remove-ratio="1" get-ratio="12"
+                                 num-threads-per-node="10">
+            <statistics>
+                <common/>
+            </statistics>
+            <l:key-selector>
+                <l:colliding-keys num-entries="${entry.count:1000}"/>
+            </l:key-selector>
+        </l:basic-operations-test>
+
+        <!-- Stop JVM monitoring -->
+        <service-stop/>
+    </rg:scenario>
+    <cleanup check-threads="false" />
+
+    <!-- How the statistics are reported -->
+    <reports>
+        <reporter type="html">
+            <html xmlns="urn:radargun:reporters:reporter-default:3.0">
+                <target-dir>${env.PWD}/results/html</target-dir>
+                <test-report>
+                    <separate-cluster-charts>true</separate-cluster-charts>
+                </test-report>
+            </html>
+        </reporter>
+    </reports>
+
+</benchmark>

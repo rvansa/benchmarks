@@ -14,7 +14,7 @@ hits some objects whose instrumentation would cause stack overflow during runtim
 provided RuleGenerator which creates file rules.btm with separate rule for each class (except those
 problematic ones). To use it, run
 
-$JAVA_HOME/bin/java -cp tracer/target/tracer-1.0-SNAPSHOT.jar org.jboss.perf.hibernate.RuleGenerator \
+$JAVA_HOME/bin/java -cp tracer/target/tracer-1.0-SNAPSHOT.jar org.jboss.perf.hibernate.InstanceRuleGenerator \
     perftest/target/benchmarks.jar $JAVA_HOME/jre/lib/rt.jar \
     -ep java.lang.Object -ep 'java.lang.ThreadLocal$ThreadLocalMap' \
     -ep java.lang.ref.WeakReference -ep java.lang.ref.Reference
