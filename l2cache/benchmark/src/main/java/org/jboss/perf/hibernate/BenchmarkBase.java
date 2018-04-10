@@ -1,5 +1,6 @@
 package org.jboss.perf.hibernate;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -39,8 +40,13 @@ import com.mockrunner.mock.jdbc.EvaluableResultSet;
 import com.mockrunner.mock.jdbc.MockParameterMap;
 import com.mockrunner.mock.jdbc.MockResultSet;
 import com.mockrunner.util.regexp.StartsEndsPatternMatcher;
+
+import org.hibernate.SessionFactory;
+import org.hibernate.cache.spi.RegionFactory;
 import org.hibernate.cache.spi.access.AccessType;
 import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.engine.spi.CacheImplementor;
+import org.infinispan.manager.EmbeddedCacheManager;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
@@ -118,10 +124,14 @@ public abstract class BenchmarkBase<T> {
         @Param("false")
         boolean lazyLoadNoTrans;
 
+        @Param("0")
+        int numOtherNodes;
+
         private JndiHelper jndiHelper = new JndiHelper();
         private JtaHelper jtaHelper = new JtaHelper();
         private JacamarHelper jacamarHelper = new JacamarHelper();
         private EntityManagerFactory entityManagerFactory;
+        private EntityManagerFactory[] otherNodes;
         // IDs of Persons that are commonly in the DB to make it big
         ArrayList<Long> regularIds;
         private PersistenceUnitUtil persistenceUnitUtil;
@@ -154,6 +164,14 @@ public abstract class BenchmarkBase<T> {
                 Map<String, String> properties = secondLevelCache.equals("none") ? NON_CACHED_PROPERTIES : getSecondLevelCacheProperties();
                 System.out.println(properties);
                 entityManagerFactory = Persistence.createEntityManagerFactory(persistenceUnit, properties);
+                otherNodes = new EntityManagerFactory[numOtherNodes];
+                for (int node = 0; node < numOtherNodes; ++node) {
+                   otherNodes[node] = Persistence.createEntityManagerFactory(persistenceUnit, properties);
+                }
+                waitForCluster(entityManagerFactory);
+                for (EntityManagerFactory node : otherNodes) {
+                    waitForCluster(node);
+                }
                 persistenceUnitUtil = entityManagerFactory.getPersistenceUnitUtil();
                 regularIds = new ArrayList<>(dbSize);
                 Metamodel metamodel = entityManagerFactory.getMetamodel();
@@ -171,6 +189,16 @@ public abstract class BenchmarkBase<T> {
             } catch (Throwable t) {
                 log(t);
                 throw t;
+            }
+        }
+
+        public void waitForCluster(EntityManagerFactory entityManagerFactory) throws Exception {
+            RegionFactory regionFactory = ((CacheImplementor) entityManagerFactory.unwrap(SessionFactory.class).getCache()).getRegionFactory();
+            Field managerField = regionFactory.getClass().getDeclaredField("manager");
+            managerField.setAccessible(true);
+            EmbeddedCacheManager manager = (EmbeddedCacheManager) managerField.get(regionFactory);
+            while (manager.getMembers().size() < numOtherNodes + 1) {
+                Thread.sleep(100);
             }
         }
 
@@ -450,6 +478,9 @@ public abstract class BenchmarkBase<T> {
                     PerfMockDriver.getInstance().setMocking(false);
                 }
                 entityManagerFactory.close();
+                for (EntityManagerFactory node : otherNodes) {
+                    node.close();
+                }
                 if (persistenceUnit.startsWith(IRON_JACAMAR)) {
                     jacamarHelper.stop();
                 } else {
