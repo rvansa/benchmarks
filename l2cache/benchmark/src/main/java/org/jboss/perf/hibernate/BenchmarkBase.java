@@ -12,6 +12,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
@@ -239,6 +240,11 @@ public abstract class BenchmarkBase<T> {
 
         @Setup(Level.Iteration)
         public void refreshDB() throws Exception {
+           if (persistenceUnit.contains("mock")) {
+              regularIds = IntStream.range(0, dbSize).mapToObj(Long::valueOf)
+                    .collect(ArrayList::new, ArrayList::add, (a1, a2) -> a1.addAll(a2));
+              return;
+           }
             EntityManager entityManager = entityManagerFactory.createEntityManager();
             try {
                 long pre;
