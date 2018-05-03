@@ -46,6 +46,7 @@ import org.hibernate.cache.spi.RegionFactory;
 import org.hibernate.cache.spi.access.AccessType;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.engine.spi.CacheImplementor;
+import org.infinispan.hibernate.cache.spi.InfinispanProperties;
 import org.infinispan.manager.EmbeddedCacheManager;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Param;
@@ -126,6 +127,12 @@ public abstract class BenchmarkBase<T> {
 
         @Param("0")
         int numOtherNodes;
+
+        @Param("")
+        String config;
+
+        @Param("false")
+        boolean useReplication;
 
         private JndiHelper jndiHelper = new JndiHelper();
         private JtaHelper jtaHelper = new JtaHelper();
@@ -244,6 +251,15 @@ public abstract class BenchmarkBase<T> {
             l2Properties.put(AvailableSettings.USE_DIRECT_REFERENCE_CACHE_ENTRIES, String.valueOf(directReferenceEntries));
             l2Properties.put(AvailableSettings.USE_MINIMAL_PUTS, String.valueOf(minimalPuts));
             l2Properties.put(AvailableSettings.ENABLE_LAZY_LOAD_NO_TRANS, String.valueOf(lazyLoadNoTrans));
+            if (!config.isEmpty()) {
+                l2Properties.put(InfinispanProperties.INFINISPAN_CONFIG_RESOURCE_PROP, config);
+            }
+            if (useReplication) {
+                l2Properties.put(InfinispanProperties.ENTITY_CACHE_RESOURCE_PROP, "replicated-entity");
+                l2Properties.put(InfinispanProperties.COLLECTION_CACHE_RESOURCE_PROP, "replicated-entity");
+                l2Properties.put(InfinispanProperties.NATURAL_ID_CACHE_RESOURCE_PROP, "replicated-entity");
+                l2Properties.put(InfinispanProperties.QUERY_CACHE_RESOURCE_PROP, "replicated-query");
+            }
             AccessType defaultAccessType = null;
             switch (secondLevelCache) {
                 case "tx":
