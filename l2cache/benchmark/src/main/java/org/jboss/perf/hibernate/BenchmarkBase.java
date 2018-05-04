@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
@@ -39,6 +40,7 @@ import com.mockrunner.jdbc.PreparedStatementResultSetHandler;
 import com.mockrunner.mock.jdbc.EvaluableResultSet;
 import com.mockrunner.mock.jdbc.MockParameterMap;
 import com.mockrunner.mock.jdbc.MockResultSet;
+import com.mockrunner.mock.jdbc.ParameterReference;
 import com.mockrunner.util.regexp.StartsEndsPatternMatcher;
 
 import org.hibernate.SessionFactory;
@@ -118,6 +120,9 @@ public abstract class BenchmarkBase<T> {
 
         @Param("true")
         boolean directReferenceEntries;
+
+        @Param("")
+        String keysFactory;
 
         @Param("false")
         boolean minimalPuts;
@@ -251,6 +256,9 @@ public abstract class BenchmarkBase<T> {
             l2Properties.put(AvailableSettings.USE_DIRECT_REFERENCE_CACHE_ENTRIES, String.valueOf(directReferenceEntries));
             l2Properties.put(AvailableSettings.USE_MINIMAL_PUTS, String.valueOf(minimalPuts));
             l2Properties.put(AvailableSettings.ENABLE_LAZY_LOAD_NO_TRANS, String.valueOf(lazyLoadNoTrans));
+            if (!keysFactory.isEmpty()) {
+                l2Properties.put(AvailableSettings.CACHE_KEYS_FACTORY, keysFactory);
+            }
             if (!config.isEmpty()) {
                 l2Properties.put(InfinispanProperties.INFINISPAN_CONFIG_RESOURCE_PROP, config);
             }
@@ -560,7 +568,34 @@ public abstract class BenchmarkBase<T> {
         public Long getRandomId(ThreadLocalRandom random, int rangeStart, int rangeEnd) {
             return regularIds.get(random.nextInt(rangeStart, rangeEnd));
         }
+
+        // This method stores fake parameters to get the same column value in the row.
+        protected Object getRandomIdForRow(String sql, MockParameterMap parameters, String columnName, int row) {
+            return parameters.computeIfAbsent(new RowReference(row), r -> getRandomId(ThreadLocalRandom.current()));
+        }
     }
+
+    private static class RowReference implements ParameterReference {
+        final int row;
+
+        private RowReference(int row) {
+            this.row = row;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            RowReference that = (RowReference) o;
+            return row == that.row;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(row);
+        }
+    }
+
 
     @State(Scope.Thread)
     public static class ThreadState {

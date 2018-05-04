@@ -1,12 +1,9 @@
 package org.jboss.perf.hibernate;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
-import javax.persistence.EntityManager;
-import javax.persistence.criteria.CriteriaBuilder;
 import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.Path;
 import javax.persistence.criteria.Root;
@@ -65,13 +62,13 @@ public class EmployerBenchmark extends BenchmarkBase<Employer> {
 
             EvaluableResultSet withEmployees = evaluableResultSetFactory.create("withEmployees");
             List<Object> idList = list(10, BenchmarkBase::getFirstParam);
-            List<Object> idSeq = seq(0, 10);
+            List<Object> randomIds = list(10, this::getRandomIdForRow);
             withEmployees.addColumn("id1_4_0_", idList);
             withEmployees.addColumn("name2_4_0_", list(10, "employer"));
             withEmployees.addColumn("employer3_4_1_", idList);
             withEmployees.addColumn("employer3_3_1_", idList);
-            withEmployees.addColumn("id1_3_1_", idSeq);
-            withEmployees.addColumn("id1_3_2_", idSeq);
+            withEmployees.addColumn("id1_3_1_", randomIds);
+            withEmployees.addColumn("id1_3_2_", randomIds);
             withEmployees.addColumn("employer3_3_2_", idList);
             withEmployees.addColumn("name2_3_2_", list(10, "employee"));
             handler.prepareResultSet("select employer0_\\.id as id1_4_0_, employer0_\\.name as name2_4_0_, employees1_\\.employer_id as employer3_._1_, "
@@ -82,8 +79,8 @@ public class EmployerBenchmark extends BenchmarkBase<Employer> {
             EvaluableResultSet employee = evaluableResultSetFactory.create("employees");
             employee.addColumn("employer3_4_0_", idList);
             employee.addColumn("employer3_3_0_", idList);
-            employee.addColumn("id1_3_0_", idSeq);
-            employee.addColumn("id1_3_1_", idSeq);
+            employee.addColumn("id1_3_0_", randomIds);
+            employee.addColumn("id1_3_1_", randomIds);
             employee.addColumn("employer3_3_1_", idList);
             employee.addColumn("name2_3_1_", list(10, "employee"));
             handler.prepareResultSet("select employees0_\\.employer_id as employer3_._0_, employees0_\\.id as id1_3_0_, employees0_\\.id as id1_3_1_, "
@@ -99,6 +96,12 @@ public class EmployerBenchmark extends BenchmarkBase<Employer> {
             queryResult.addColumn("name2_4_", new Object[] { "employer" });
             handler.prepareResultSet("select employer0_\\.id as id1_4_, employer0_\\.name as name2_4_ from Employer employer0_ inner join Employee employees1_ " +
                   "on employer0_\\.id=employees1_\\.employer_id where employees1_\\.name like \\?", queryResult);
+
+            EvaluableResultSet employeeById = evaluableResultSetFactory.create("employeeById");
+            employeeById.addColumn("id1_3_0_", Collections.singletonList((EvaluableResultSet.Evaluable) BenchmarkBase::getFirstParam));
+            employeeById.addColumn("employer3_3_0_", Collections.singletonList((EvaluableResultSet.Evaluable) this::getRandomIdForRow));
+            employeeById.addColumn("name2_3_0_", Collections.singletonList("employee"));
+            handler.prepareResultSet("select employee0_\\.id as id1_3_0_, employee0_\\.employer_id as employer3_3_0_, employee0_\\.name as name2_3_0_ from Employee employee0_ where employee0_\\.id=\\?", employeeById);
 
             handler.prepareUpdateCount("update Employee set employer_id=\\?, name=\\? where id=\\?", 1);
             handler.prepareUpdateCount("delete from Employer where id=\\?", 1);
