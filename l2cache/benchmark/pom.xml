@@ -16,7 +16,7 @@
 
     <properties>
        <!-- this is the default version overriden in profiles -->
-       <version.hibernate>5.1.12.Final</version.hibernate>
+       <version.hibernate>5.3.10.Final</version.hibernate>
        <version.hibernate.validator>4.1.0.Final</version.hibernate.validator>
        <version.jbossts>4.16.3.Final</version.jbossts>
        <version.jbossts.jts>4.17.3.Final</version.jbossts.jts>
@@ -71,8 +71,8 @@
         </dependency>
         <dependency>
             <groupId>com.zaxxer</groupId>
-            <artifactId>HikariCP-java6</artifactId>
-            <version>2.3.3</version>
+            <artifactId>HikariCP</artifactId>
+            <version>3.3.1</version>
         </dependency>
         <dependency>
             <groupId>org.perfmock</groupId>

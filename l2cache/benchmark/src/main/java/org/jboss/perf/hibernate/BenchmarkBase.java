@@ -44,6 +44,7 @@ import com.mockrunner.mock.jdbc.ParameterReference;
 import com.mockrunner.util.regexp.StartsEndsPatternMatcher;
 
 import org.hibernate.SessionFactory;
+import org.hibernate.cache.internal.NoCachingRegionFactory;
 import org.hibernate.cache.spi.RegionFactory;
 import org.hibernate.cache.spi.access.AccessType;
 import org.hibernate.cfg.AvailableSettings;
@@ -206,6 +207,9 @@ public abstract class BenchmarkBase<T> {
 
         public void waitForCluster(EntityManagerFactory entityManagerFactory) throws Exception {
             RegionFactory regionFactory = ((CacheImplementor) entityManagerFactory.unwrap(SessionFactory.class).getCache()).getRegionFactory();
+            if (regionFactory instanceof NoCachingRegionFactory) {
+                return;
+            }
             Field managerField = regionFactory.getClass().getDeclaredField("manager");
             managerField.setAccessible(true);
             EmbeddedCacheManager manager = (EmbeddedCacheManager) managerField.get(regionFactory);
