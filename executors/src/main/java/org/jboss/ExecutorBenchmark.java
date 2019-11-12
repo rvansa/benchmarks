@@ -5,8 +5,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Param;
@@ -34,6 +37,9 @@ public class ExecutorBenchmark {
 
         @Param("2000")
         int pwork;
+
+        @Param("p%04d")
+        String workerNamePattern; // perf record/script truncates long thread names
 
         BlockingQueue<Runnable> queue = null;
         ExecutorService executorService;
@@ -67,7 +73,8 @@ public class ExecutorBenchmark {
                     throw new IllegalStateException();
             }
             if (queue != null) {
-                executorService = new ThreadPoolExecutor(workers, workers, 1, TimeUnit.MINUTES, queue, new ThreadPoolExecutor.DiscardPolicy());
+                executorService = new ThreadPoolExecutor(workers, workers, 1, TimeUnit.MINUTES, queue,
+                      new NamingThreadFactory(workerNamePattern), new ThreadPoolExecutor.AbortPolicy());
             }
         }
 
@@ -94,5 +101,21 @@ public class ExecutorBenchmark {
         state.semaphore.acquire();
         Blackhole.consumeCPU(state.pwork);
         state.executorService.execute(task);
+    }
+
+    private static class NamingThreadFactory implements ThreadFactory {
+        private final AtomicInteger counter = new AtomicInteger();
+        private final String pattern;
+
+        private NamingThreadFactory(String pattern) {
+            this.pattern = pattern;
+        }
+
+        @Override
+        public Thread newThread(Runnable runnable) {
+            Thread thread = new Thread(runnable);
+            thread.setName(String.format(pattern, counter.incrementAndGet()));
+            return thread;
+        }
     }
 }
