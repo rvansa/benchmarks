@@ -65,30 +65,23 @@ public class MpmcArrayBlockingQueue<T> extends AbstractQueue<T> implements Block
 
   @Override
   public void put(T t) throws InterruptedException {
-    if (fastQueue.offer(t)) {
-      wakeupConsumer();
-    } else {
-      overflowQueue.put(t);
-    }
+    offer(t);
   }
 
   @Override
   public boolean offer(T t) {
     if (fastQueue.offer(t)) {
       wakeupConsumer();
-      return true;
     } else {
-      return false;
+      //it should be always true because unbounded
+      overflowQueue.offer(t);
     }
+    return true;
   }
 
   @Override
   public boolean offer(T t, long timeout, TimeUnit unit) throws InterruptedException {
-    if (fastQueue.offer(t)) {
-      wakeupConsumer();
-      return true;
-    }
-    return false;
+    return offer(t);
   }
 
   @Override

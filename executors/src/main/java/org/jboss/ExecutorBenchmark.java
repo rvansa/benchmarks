@@ -9,9 +9,10 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Supplier;
+import java.util.concurrent.locks.LockSupport;
 
 import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
@@ -22,14 +23,13 @@ import org.openjdk.jmh.infra.Blackhole;
 import io.netty.util.concurrent.ImmediateEventExecutor;
 
 public class ExecutorBenchmark {
-    static BenchmarkState state;
 
     @State(Scope.Benchmark)
     public static class BenchmarkState {
         @Param({ "NONE", "LBQ", "LTQ", "BUSY", "MPMC", "XADD" })
         String impl;
 
-        @Param("1000")
+        @Param({"-1", "1000"})
         int capacity;
 
         @Param("20")
@@ -47,8 +47,11 @@ public class ExecutorBenchmark {
 
         @Setup
         public void setup() {
-            state = this;
-            semaphore = new Semaphore(capacity);
+            if (capacity < 0) {
+                semaphore = null;
+            } else {
+                semaphore = new Semaphore(capacity);
+            }
             switch (impl.toUpperCase()) {
                 case "NONE":
                     queue = null;
@@ -61,13 +64,13 @@ public class ExecutorBenchmark {
                     queue = new LinkedTransferQueue<>();
                     break;
                 case "BUSY":
-                    queue = new BusyMpmcArrayQueue<>(capacity);
+                    queue = new BusyMpmcArrayQueue<>(Math.max(capacity, 1024));
                     break;
                 case "MPMC":
-                    queue = new MpmcArrayBlockingQueue<>(capacity, workers);
+                    queue = new MpmcArrayBlockingQueue<>(Math.max(capacity, 1024), workers);
                     break;
                 case "XADD":
-                    queue = new MpmcXaddBlockingQueue(workers);
+                    queue = new MpmcXaddBlockingQueue(Math.max(capacity, 1024), workers);
                     break;
                 default:
                     throw new IllegalStateException();
@@ -78,9 +81,22 @@ public class ExecutorBenchmark {
             }
         }
 
+        @TearDown(Level.Iteration)
+        public void awaitPendingTasks() {
+            if (queue != null) {
+                //it would make the bench to pay awaking the consumer threads on each iteration
+                //but it would ensure that no backlog of pending tasks would
+                //churn the queue during the whole bench
+                while (!queue.isEmpty()) {
+                    LockSupport.parkNanos(1L);
+                }
+            }
+        }
+
         @TearDown
         public void shutdown() {
-            executorService.shutdownNow();
+            //there shouldn't be any pending tasks here
+            executorService.shutdown();
         }
     }
 
@@ -88,17 +104,29 @@ public class ExecutorBenchmark {
     public static class Task  implements Runnable {
         @Param("2000")
         int cwork;
+        Semaphore semaphore;
+
+        @Setup
+        public void init(BenchmarkState state) {
+            semaphore = state.semaphore;
+        }
 
         @Override
         public void run() {
             Blackhole.consumeCPU(cwork);
-            state.semaphore.release();
+            final Semaphore semaphore = this.semaphore;
+            if (semaphore != null) {
+                semaphore.release();
+            }
         }
     }
 
     @Benchmark
     public void producer(BenchmarkState state, Task task) throws InterruptedException {
-        state.semaphore.acquire();
+        final Semaphore semaphore = state.semaphore;
+        if (semaphore != null) {
+            semaphore.acquire();
+        }
         Blackhole.consumeCPU(state.pwork);
         state.executorService.execute(task);
     }

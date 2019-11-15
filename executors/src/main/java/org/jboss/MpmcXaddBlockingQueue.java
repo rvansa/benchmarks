@@ -8,13 +8,20 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.locks.LockSupport;
 
-import org.jctools.queues.MpmcProgressiveChunkedQueue;
+import org.jctools.queues.MpmcUnboundedXaddArrayQueue;
 
 public class MpmcXaddBlockingQueue<T> extends AbstractQueue<T> implements BlockingQueue<T> {
-   private final MpmcProgressiveChunkedQueue<T> queue = new MpmcProgressiveChunkedQueue<>(1024);
+
+   private final MpmcUnboundedXaddArrayQueue<T> queue;
    private final AtomicReferenceArray<Thread> waitingConsumers;
 
-   public MpmcXaddBlockingQueue(int consumers) {
+   public MpmcXaddBlockingQueue(int chunkSize, int consumers) {
+      queue = new MpmcUnboundedXaddArrayQueue<>(chunkSize);
+      waitingConsumers = new AtomicReferenceArray<>(consumers);
+   }
+
+   public MpmcXaddBlockingQueue(int chunkSize, int maxPooledChunks, int consumers) {
+      queue = new MpmcUnboundedXaddArrayQueue<>(chunkSize, maxPooledChunks);
       waitingConsumers = new AtomicReferenceArray<>(consumers);
    }
 
