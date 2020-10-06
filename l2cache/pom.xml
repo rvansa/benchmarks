@@ -21,7 +21,7 @@
     </modules>
 
     <properties>
-        <version.jmh>1.20</version.jmh>
+        <version.jmh>1.25.2</version.jmh>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <javac.target>1.8</javac.target>
         <version.infinispan>9.4.14.Final</version.infinispan>

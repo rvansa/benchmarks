@@ -201,6 +201,7 @@ public abstract class BenchmarkBase<T> {
                 }
             } catch (Throwable t) {
                 log(t);
+                shutdown();
                 throw t;
             }
         }
