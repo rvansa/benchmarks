@@ -19,7 +19,7 @@
       <version.jmh>1.15</version.jmh>
       <javac.target>1.7</javac.target>
       <uberjar.name>benchmarks</uberjar.name>
-      <version.infinispan>8.2.4.Final</version.infinispan>
+      <version.infinispan>11.0.6.Final</version.infinispan>
       <version.jbossts>4.16.3.Final</version.jbossts>
       <version.jbossts.jts>4.17.3.Final</version.jbossts.jts>
       <version.cache2k>0.21.1</version.cache2k>
