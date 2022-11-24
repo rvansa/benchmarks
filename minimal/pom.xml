@@ -13,7 +13,7 @@
       <javac.target>1.6</javac.target>
       <version.jmh>1.6.1</version.jmh>
       <uberjar.name>benchmarks</uberjar.name>
-      <version.hibernate>4.3.8.Final</version.hibernate>
+      <version.hibernate>5.3.20.Final</version.hibernate>
       <version.hibernate.validator>4.1.0.Final</version.hibernate.validator>
       <version.jbossts>4.16.3.Final</version.jbossts>
       <version.jbossts.jts>4.17.3.Final</version.jbossts.jts>
